@@ -871,9 +871,9 @@ Execution changes in 1 workflow file.
 | `quanto version` | 버전 출력 |
 | `quanto inspect <file> [--format text\|json]` | 트리거, 권한, 잡별 인스턴스 수, runs-on, 액션 목록, 그래프 깊이·너비, 모델 진단 출력 |
 | `quanto diff <before> <after> [--format text\|markdown\|json] [--path <name>]` | 두 파일을 비교한다. 경로가 `/dev/null`이거나 빈 파일이면 부재로 취급한다. `--path`의 기본값은 after 경로(없으면 before 경로)다 |
-| `quanto serve --role web\|worker\|all` | 페이즈 6에서 추가 |
-| `quanto migrate` | 페이즈 6에서 추가 |
-| `quanto manifest --webhook-url <url> --homepage-url <url> [--name quanto]` | 페이즈 7에서 추가. GitHub App manifest JSON 출력 |
+| `quanto serve --role web\|worker\|all` | 페이즈 7에서 추가 |
+| `quanto migrate` | 페이즈 7에서 추가 |
+| `quanto manifest --webhook-url <url> --homepage-url <url> [--name quanto]` | 페이즈 8에서 추가. GitHub App manifest JSON 출력 |
 
 `diff`의 종료 코드: 입력 파일을 읽지 못하면 1, 사용법 오류면 2, 그 외에는 파싱 실패로 `unanalyzable`이 나와도 0이다(분석 결과를 정상적으로 보고한 것이므로).
 
