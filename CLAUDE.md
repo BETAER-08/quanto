@@ -1,0 +1,1251 @@
+# quanto — 에이전트 작업 명세
+
+이 문서는 저장소 루트에 둔다. 모든 작업 세션은 이 문서를 먼저 끝까지 읽는다. 이 문서와 개별 프롬프트가 충돌하면 이 문서가 우선한다.
+
+---
+
+## 0. 절대 규칙
+
+1. **git 규칙 (클라우드 세션 기준).** 이 작업은 Claude Code 클라우드 세션에서 수행한다. 세션이 끝나면 컨테이너가 사라지므로 **푸시하지 않은 작업은 유실된다.**
+   - 페이즈 산출물 중 하나의 묶음(패키지 하나, 골든 케이스 묶음 하나 등)이 해당 테스트를 통과할 때마다 커밋하고 현재 작업 브랜치에 푸시한다. 페이즈 끝에 한 번만 커밋하지 않는다.
+   - 커밋 메시지는 `phase N: <영어 요약>` 형식이다.
+   - 테스트가 실패하는 상태는 커밋하지 않는다. 예외: 세션 종료가 임박했을 때는 `phase N: wip <내용>`으로 커밋·푸시하고 보고서에 미완료 항목을 적는다.
+   - 푸시 대상은 세션의 작업 브랜치뿐이다. `main`/`master`에 직접 푸시하지 않는다. `--force` 푸시, `rebase`, `reset --hard`, 히스토리 재작성, 태그 생성, 브랜치 삭제를 하지 않는다.
+   - PR은 만들지 않는다. 병합은 사람이 한다.
+2. **코드 주석 금지.** `//` 주석, `/* */` 주석, doc comment를 테스트 파일까지 포함해 전부 쓰지 않는다. SQL, 셸, YAML, Makefile, Containerfile 안의 주석도 금지다. 예외는 컴파일러 지시문 `//go:build`, `//go:embed`, `//go:generate`와 셸 스크립트 첫 줄의 shebang뿐이다. 마크다운 문서는 주석 규칙의 대상이 아니다. Go 파일은 `go run scripts/check-comments.go`가 기계적으로 검사한다(20.1절).
+3. **플레이스홀더 금지.** `TODO`, `FIXME`, `XXX`, `panic("not implemented")`, 빈 함수 본문, "추후 구현" 류를 남기지 않는다. 현재 페이즈 범위 밖의 기능은 파일 자체를 만들지 않는다.
+4. **범위 고정.** 이 문서에 없는 기능, 플래그, 환경변수, 의존성, 파일을 추가하지 않는다. 명세가 모호하면 가장 보수적인 해석을 택하고 페이즈 보고서의 "결정 사항"에 기록한다.
+5. **의존성 허용 목록.** Go 표준 라이브러리, `gopkg.in/yaml.v3`, `github.com/jackc/pgx/v5`, `github.com/prometheus/client_golang`. 그 외 모듈은 테스트 용도라도 추가하지 않는다. GitHub API 클라이언트, JWT, 라우터, CLI 프레임워크, 테스트 어서션 라이브러리 전부 표준 라이브러리로 구현한다.
+6. **LICENSE 파일 수정 금지.**
+7. **테스트는 실제 네트워크에 접근하지 않는다.** 외부 HTTP는 `net/http/httptest`로 대체한다. 유일한 예외는 `scripts/fetch-corpus.sh`다.
+8. **`core/`와 `internal/` 안에서 panic, `log.Fatal`, `os.Exit` 금지.** 전부 error로 반환한다. 종료 처리는 `cmd/`에서만 한다. `recover`는 워커 작업 루프 한 곳에서만 허용한다.
+9. **결정성.** 입력이 같으면 모든 출력(진단 순서, 보고서, JSON, 마크다운)이 바이트 단위로 같아야 한다. map을 순회한 결과를 출력하거나 반환할 때는 반드시 정렬한다.
+10. **검증을 우회하지 않는다.** 테스트를 삭제하거나 `t.Skip`을 추가하거나 기대값을 근거 없이 바꿔서 통과시키지 않는다. 골든 파일을 갱신했다면 보고서에 갱신한 파일과 그 근거를 적는다.
+11. **에러 처리.** 래핑은 `fmt.Errorf("...: %w", err)`로 한다. 에러를 무시하지 않는다. 비밀값(개인키, 웹훅 시크릿, 토큰, DB 비밀번호)은 에러 메시지와 로그에 절대 포함하지 않는다.
+
+---
+
+## 1. 제품 정의
+
+quanto는 GitHub App이다. PR이 `.github/workflows/*.yml` 또는 `*.yaml`을 변경하면, 변경 전후 워크플로를 **실행 모델**로 해석해서 무엇이 달라지는지를 수치와 사실로 보고한다.
+
+보고 대상의 예는 다음과 같다. 매트릭스 조합 수 6 → 24, `needs` 체인 길이, 최대 동시 잡 수, `permissions` 확대, 신규 서드파티 액션, SHA 고정 해제, 트리거 추가, 스케줄 빈도, 과거 실행 이력 기반 러너 시간 추정.
+
+**어조 정책.** quanto는 린터가 아니라 계기판이다. "나쁘다", "위험하다", "해야 한다"라고 판단하지 않는다. 무엇이 얼마나 바뀌는지만 말한다. 머지를 차단하지 않는다. Check Run 결론은 항상 `neutral`이다.
+
+**보안 정책.** PR 코드를 실행하지 않는다. 워크플로 파일 원문을 DB에 저장하지 않는다. 분석 결과 메타데이터만 저장한다.
+
+**v1 범위 밖.** 워크플로 생성, 로컬 실행, 스키마 린팅(actionlint 영역), 저장소 파일 대조, 정책 엔진, 머지 차단, 결제, 대시보드, 비공개 저장소 기본 지원, 달러 단위 비용 환산.
+
+---
+
+## 2. 저장소 구조
+
+```
+cmd/quanto/                 main 패키지, 서브커맨드 라우팅
+core/source/                YAML 로딩, 위치(span), 논리 경로
+core/expr/                  ${{ }} 표현식 렉서·파서·참조 추출
+core/model/                 AST → Workflow 실행 모델
+core/matrix/                strategy.matrix 확장
+core/graph/                 needs 그래프 분석
+core/semdiff/               두 Workflow의 의미 차이
+core/report/                텍스트·마크다운·JSON·어노테이션 렌더링
+internal/cli/               서브커맨드 구현
+internal/config/            환경변수 로딩·검증
+internal/github/            GitHub REST 클라이언트, App JWT
+internal/store/             PostgreSQL, 마이그레이션, 큐
+internal/store/migrations/  *.sql
+internal/app/               web 역할, worker 역할, 작업 핸들러
+internal/metrics/           Prometheus 수집기
+testdata/golden/            골든 파일
+testdata/corpus/            실제 워크플로 (gitignore, 스크립트로 수집)
+scripts/fetch-corpus.sh
+scripts/check-comments.go
+deploy/Containerfile
+deploy/quadlet/
+docs/
+.github/workflows/ci.yml
+Makefile
+```
+
+**의존 방향 (강제).**
+
+| 패키지 | import 허용 |
+|---|---|
+| core/source | 표준 라이브러리, yaml.v3 |
+| core/expr | 표준 라이브러리 |
+| core/model | source, expr |
+| core/matrix | source, expr |
+| core/graph | model |
+| core/semdiff | source, expr, model, matrix, graph |
+| core/report | semdiff, source |
+
+`core/` 아래 어떤 패키지도 `internal/`, `net/http`, `database/sql`, `pgx`, `prometheus`를 import하지 않는다. 이 규칙을 `core/imports_test.go`로 강제한다. 이 테스트는 `go/parser`로 `core/` 아래 모든 비테스트 `.go` 파일의 import를 읽고 위 표와 대조한다.
+
+---
+
+## 3. 공통 규약
+
+- 모듈 경로는 `git remote get-url origin`의 결과에서 도출한다. `https://github.com/<owner>/<repo>.git` 또는 `git@github.com:<owner>/<repo>.git` 형태면 `github.com/<owner>/<repo>`다. 원격이 없으면 작업을 멈추고 사람에게 묻는다.
+- `go.mod`의 `go` 지시어는 설치된 Go의 `major.minor`로 쓴다. 1.23 미만이면 멈추고 보고한다.
+- 로깅은 `log/slog` JSON 핸들러를 쓴다. 레벨은 `QUANTO_LOG_LEVEL`로 정한다.
+- 식별자와 코드는 영어로 쓴다. 사용자에게 보이는 출력(PR 코멘트, Check Run, CLI)도 영어로 쓴다.
+- 테스트는 표준 `testing`만 쓴다. 테이블 주도 테스트를 기본으로 한다.
+- 골든 파일 테스트는 패키지별 `-update` 플래그(`flag.Bool("update", ...)`)로 갱신한다.
+- 퍼즈 테스트 대상: `core/source.Load`, `core/expr.ParseTemplate`, `core/matrix.Expand`, `core/semdiff.Compare`.
+
+---
+
+## 4. core/source
+
+### 4.1 API
+
+```go
+type Position struct {
+    File      string
+    Line      int
+    Column    int
+    EndLine   int
+    EndColumn int
+    Path      string
+}
+func (p Position) Valid() bool
+func (p Position) Contains(line, column int) bool
+func (p Position) Cover(q Position) Position
+func (p Position) String() string
+
+type Positioned[T any] struct {
+    Value T
+    Pos   Position
+}
+func At[T any](v T, pos Position) Positioned[T]
+
+type Kind int
+const (
+    KindInvalid Kind = iota
+    KindScalar
+    KindMapping
+    KindSequence
+)
+
+type Document struct {
+    File    string
+    Content []byte
+}
+func Load(file string, content []byte) (*Document, error)
+func (d *Document) Root() *Node
+func (d *Document) Empty() bool
+func (d *Document) LineCount() int
+
+type Node struct{}
+func (n *Node) Kind() Kind
+func (n *Node) Exists() bool
+func (n *Node) Pos() Position
+func (n *Node) Path() string
+func (n *Node) Tag() string
+func (n *Node) IsNull() bool
+func (n *Node) Len() int
+func (n *Node) Field(name string) *Node
+func (n *Node) FieldKey(name string) *Node
+func (n *Node) Has(name string) bool
+func (n *Node) Fields() []Field
+func (n *Node) Keys() []string
+func (n *Node) Items() []*Node
+func (n *Node) Index(i int) *Node
+func (n *Node) Str() (string, bool)
+func (n *Node) StrOr(fallback string) string
+func (n *Node) PosStr() (Positioned[string], bool)
+func (n *Node) Int() (int, bool)
+func (n *Node) Bool() (bool, bool)
+func (n *Node) StrList() []Positioned[string]
+func (n *Node) Walk(fn func(*Node) bool)
+func (n *Node) Lookup(path string) *Node
+
+type Field struct {
+    Name  string
+    Key   *Node
+    Value *Node
+}
+
+type SyntaxError struct {
+    File    string
+    Line    int
+    Message string
+    Cause   error
+}
+func (e *SyntaxError) Error() string
+func (e *SyntaxError) Unwrap() error
+func (e *SyntaxError) Pos() Position
+```
+
+### 4.2 불변식 (실측으로 확인된 사항 포함)
+
+1. **파싱 방식.** `yaml.v3`의 `yaml.Node` 트리를 직접 순회한다. 워크플로를 `map[string]any`나 구조체로 `Unmarshal`하지 않는다. 이 방식에서는 `on` 키가 문자열 `"on"`으로 유지된다(불리언 변환 함정 없음).
+2. **컬럼은 rune 기준 1부터 시작한다.** `yaml.v3`가 보고하는 Column은 바이트가 아니라 문자 단위다. 예: `한글키: value`에서 값의 Column은 6이다. 바이트로 계산하지 않는다.
+3. **종료 위치 계산.** yaml.v3는 시작 위치만 주므로 직접 계산한다.
+   - plain 스칼라 한 줄: `Column + runeLen(Value) - 1`. 이 값이 해당 줄의 후행 공백 제외 폭을 넘으면 여러 줄 plain 스칼라로 보고, 들여쓰기가 첫 연속 줄 들여쓰기 이상이고 새 키(`key:`)나 시퀀스 항목(`- `)이나 주석이 아닌 줄까지 확장한다.
+   - 작은따옴표 스칼라: 닫는 `'`까지 스캔한다. `''`는 이스케이프다. 여러 줄에 걸칠 수 있다.
+   - 큰따옴표 스칼라: 닫는 `"`까지 스캔한다. `\` 다음 문자는 건너뛴다. 여러 줄에 걸칠 수 있다.
+   - 블록 스칼라(`|`, `|-`, `|+`, `>`, `>-`, `>+`): **`Value`의 개행 수를 세지 않는다.** 폴딩(`>`)은 개행을 공백으로 접어서 실제 줄 수보다 작게 나온다. 대신 인디케이터 다음 줄부터 스캔해서, 빈 줄은 건너뛰고, 첫 내용 줄의 들여쓰기 이상인 줄이 이어지는 동안 확장한다. 종료 위치는 마지막 내용 줄의 후행 공백 제외 폭이다.
+   - 플로우 컬렉션(`[...]`, `{...}`): 자식의 최대 종료 위치 이후 공백과 쉼표만 지나 만나는 닫는 괄호까지 확장한다. 빈 `[]`, `{}`도 괄호를 포함한다.
+   - 블록 매핑·시퀀스: 모든 자식 종료 위치의 최댓값이다.
+   - 별칭(`*name`): 토큰 끝까지다.
+4. **클램프.** 모든 Position을 문서 범위로 클램프한다. `Line`과 `EndLine`은 `[1, LineCount]`, 컬럼은 `[1, max(1, 해당 줄의 후행 공백 제외 폭)]` 안에 있어야 한다. `EndLine ≥ Line`이고, 같은 줄이면 `EndColumn ≥ Column`이다. 이유: `push:` 같은 null 값 노드는 yaml.v3가 줄 끝을 넘는 컬럼을 보고하고, GitHub Check Run API는 범위 밖 좌표를 거부한다.
+5. **줄 인덱스는 CRLF를 LF로 정규화해서 만든다.**
+6. **논리 경로.** 루트는 `""`다. 매핑 키는 `부모 + "." + 키`(부모가 빈 문자열이면 키 자체)다. 키가 비었거나 `. [ ] ' "` 공백·탭 중 하나를 포함하면 `부모 + "['" + (작은따옴표를 두 개로 바꾼 키) + "']"`다. 시퀀스 항목은 `부모 + "[i]"`다. 모든 노드에 대해 `root.Lookup(n.Path())`는 같은 Position을 가진 노드를 돌려줘야 한다.
+7. **별칭 해석.** 값이 별칭 노드면 대상 노드의 내용을 투명하게 노출한다. 해당 Node의 Position은 별칭 토큰의 위치를 쓴다. `Kind()`는 대상의 Kind를 돌려준다.
+8. **머지 키 `<<`.** `Field`, `FieldKey`, `Has`, `Fields`, `Keys`는 `<<`의 값(매핑, 매핑의 별칭, 또는 그런 것들의 시퀀스)에 있는 키를 포함한다. 명시 키가 머지 키보다 우선한다. 시퀀스 안에서는 앞쪽 항목이 우선한다. `<<` 자체는 `Fields`와 `Keys` 결과에 포함하지 않는다. 머지로 들어온 필드의 Position은 앵커 정의 쪽 위치다. 해석 깊이가 64를 넘으면 더 따라가지 않는다.
+9. **`Walk`는 별칭을 따라가지 않는다.** 별칭은 리프로 방문한다. 이는 별칭 폭증 입력에 대한 방어다.
+10. **빈 문서.** 빈 입력이나 주석만 있는 입력은 에러 없이 `Empty() == true`, `Root() == nil`이다.
+11. **nil 안전.** 모든 `*Node` 메서드는 nil 수신자에서 패닉 없이 영값을 돌려준다. `root.Field("a").Field("b").Index(3).Field("c").Exists()`는 중간이 없어도 false다.
+12. `StrList`는 스칼라 하나, 시퀀스, 매핑(키 목록) 세 형태를 받는다.
+13. `Bool`은 `true/false/yes/no/on/off/y/n`을 대소문자 무시로 인식한다.
+14. 구문 오류는 `*SyntaxError`로 반환한다. yaml.v3 메시지 `yaml: line N: msg`에서 줄 번호를 추출한다.
+
+### 4.3 필수 테스트
+
+`textAt(content, pos)` 헬퍼로 Position이 가리키는 실제 텍스트를 추출해 비교한다. 숫자 비교만으로 끝내지 않는다.
+
+- plain, 작은따옴표(`'it''s'`), 큰따옴표(`"say \"hi\""`), 리터럴 블록, strip 리터럴 블록, **폴딩 블록**, 플로우 시퀀스, 플로우 매핑, 빈 플로우 시퀀스, 블록 시퀀스, 중첩 매핑, 인라인 주석 뒤 plain 스칼라의 span
+- 한글 값과 한글 키의 span (rune 컬럼 검증)
+- 논리 경로 생성, 점을 포함한 키의 대괄호 경로, `Lookup` 왕복
+- `on` 키가 문자열로 유지됨
+- nil 안전 체인
+- `StrList` 세 형태와 각 항목의 span
+- null 값(`push:`), `Has`로 null 키 존재 확인
+- CRLF 입력의 값과 span
+- 별칭 해석, 머지 키 해석, 명시 키의 머지 키 우선, 머지 체인 시퀀스
+- 구문 오류의 줄 번호
+- 빈 문서, 주석 전용 문서
+- **불변식 테스트**: 다양한 샘플(매트릭스, 재사용 워크플로, 앵커, 한글, 주석 도배, 깊은 중첩, 플로우 스타일, 빈 값, 긴 표현식, 후행 개행 없음, CRLF)에서 모든 노드가 유효 Position을 갖고, 텍스트 추출이 가능하고, 자식 span이 부모 span 안에 있음을 검증
+- **비정상 입력 무패닉 테스트**: 빈 문자열, `[`, `{`, 닫히지 않은 따옴표, 인디케이터만 있는 블록 스칼라, 탭 들여쓰기, 정의 안 된 별칭, `- - - -`, 복합 키, 200단 중첩, 10000자 스칼라, 제어 문자, BOM
+- **퍼즈**: 모든 노드에서 `EndLine ≥ Line`, `EndLine ≤ LineCount`, 같은 줄이면 `EndColumn ≥ Column`
+- **코퍼스 테스트**: `testdata/corpus/*.yml|*.yaml` 전부를 불변식 검사와 경로 왕복 검사로 돌린다. 디렉터리가 비었거나 없으면 skip한다.
+
+---
+
+## 5. core/expr
+
+범위는 파싱과 참조 추출까지다. 평가기는 만들지 않는다.
+
+### 5.1 문법
+
+- 리터럴: `null`, `true`, `false`, 숫자(JSON 숫자 형식과 `0x` 16진수), 작은따옴표 문자열(`''` 이스케이프)
+- 식별자: 컨텍스트 이름과 속성 이름. 영문자로 시작하고 영문자, 숫자, `_`, `-`로 이어진다
+- 연산자 우선순위(높은 것부터): `()` 그룹 → `[]` 인덱스, `.` 속성 → `!` → `< <= > >=` → `== !=` → `&&` → `||`
+- `.*` 와일드카드 필터
+- 함수 호출 `name(arg, ...)`. 함수 이름은 소문자로 정규화한다. 알 수 없는 함수는 파싱 오류가 아니다
+
+### 5.2 API
+
+```go
+type Expr interface{ Offset() int }
+type Literal struct{ Value any; Off int }
+type Ident struct{ Name string; Off int }
+type Property struct{ Target Expr; Name string; Off int }
+type Index struct{ Target Expr; Index Expr; Off int }
+type Star struct{ Target Expr; Off int }
+type Unary struct{ Op string; X Expr; Off int }
+type Binary struct{ Op string; Left, Right Expr; Off int }
+type Call struct{ Name string; Args []Expr; Off int }
+
+type Segment struct {
+    Text   string
+    Expr   Expr
+    IsExpr bool
+    Offset int
+}
+type Template struct{ Segments []Segment }
+
+type Reference struct {
+    Context string
+    Path    []string
+}
+
+type SyntaxError struct {
+    Offset  int
+    Message string
+}
+
+func ParseExpression(s string) (Expr, error)
+func ParseTemplate(s string) (*Template, error)
+func ParseCondition(s string) (*Template, error)
+func References(e Expr) []Reference
+func TemplateReferences(t *Template) []Reference
+func Functions(e Expr) []string
+func IsDynamic(s string) bool
+```
+
+- `Offset`은 입력 문자열의 rune 오프셋이다.
+- `ParseTemplate`은 `${{ ... }}` 구간을 렉서로 스캔한다. 문자열 리터럴 안의 `}}`는 종료로 보지 않는다. 닫히지 않으면 `*SyntaxError`다.
+- `ParseCondition`은 `if:` 의미론이다. 앞뒤 공백을 제거한 문자열 전체가 `${{ ... }}` 하나면 그 안을 식 하나로 파싱한다. `${{`가 없으면 문자열 전체를 식 하나로 파싱한다. 그 외 혼합 형태는 `ParseTemplate`로 처리한다.
+- `References`는 컨텍스트 이름과 경로를 소문자로 정규화한다. 리터럴 문자열 인덱스(`a['b']`)는 경로 세그먼트가 되고, 동적 인덱스와 `*`는 `"*"` 세그먼트가 된다. 결과는 정렬하고 중복을 제거한다.
+- `IsDynamic(s)`는 `s`에 `${{`가 있으면 true다.
+
+### 5.3 필수 테스트
+
+우선순위 결합(`a || b && c`, `!a == b`), 속성·인덱스 체인, `fromJSON(needs.setup.outputs.matrix)`, `secrets['MY_TOKEN']`, `github.event.pull_request.head.sha`, 와일드카드, 템플릿 혼합(`prefix ${{ a }} mid ${{ b }}`), 문자열 안의 `}}`, 닫히지 않은 템플릿 오류, 조건 세 형태, 대소문자 정규화, 16진수·지수 숫자, 파싱 → 참조 추출 결정성, 퍼즈(패닉 없음).
+
+---
+
+## 6. core/model
+
+### 6.1 API
+
+```go
+type Diagnostic struct {
+    Code    string
+    Message string
+    Pos     source.Position
+}
+
+var ErrNotWorkflow = errors.New("document is not a workflow mapping")
+
+func Parse(doc *source.Document) (*Workflow, []Diagnostic, error)
+
+type Workflow struct {
+    File        string
+    Name        string
+    Triggers    []Trigger
+    Permissions PermissionSet
+    Concurrency *Concurrency
+    EnvKeys     []string
+    SecretRefs  []string
+    Jobs        []*Job
+    Pos         source.Position
+}
+
+type Trigger struct {
+    Event   string
+    Filters map[string][]source.Positioned[string]
+    Crons   []source.Positioned[string]
+    Inputs  []string
+    Pos     source.Position
+}
+
+type Job struct {
+    ID              string
+    Name            source.Positioned[string]
+    Needs           []source.Positioned[string]
+    If              *Condition
+    RunsOn          RunnerSpec
+    Strategy        *Strategy
+    Permissions     PermissionSet
+    Environment     string
+    Concurrency     *Concurrency
+    TimeoutMinutes  *source.Positioned[string]
+    ContinueOnError string
+    ContainerImage  string
+    Services        []string
+    Uses            *ReusableRef
+    With            map[string]source.Positioned[string]
+    SecretsInherit  bool
+    SecretNames     []string
+    Outputs         []string
+    Steps           []*Step
+    Pos             source.Position
+}
+
+type Step struct {
+    Index            int
+    ID               string
+    Name             string
+    If               *Condition
+    Uses             *ActionRef
+    Run              *source.Positioned[string]
+    With             map[string]source.Positioned[string]
+    EnvKeys          []string
+    Shell            string
+    WorkingDirectory string
+    Pos              source.Position
+}
+
+type Condition struct {
+    Raw      string
+    Template *expr.Template
+    ParseErr error
+    Pos      source.Position
+}
+
+type RunnerSpec struct {
+    Labels  []source.Positioned[string]
+    Group   string
+    Dynamic bool
+    Pos     source.Position
+}
+
+type Strategy struct {
+    Matrix      *source.Node
+    FailFast    string
+    MaxParallel string
+    Pos         source.Position
+}
+
+type Concurrency struct {
+    Group            string
+    CancelInProgress string
+    Pos              source.Position
+}
+
+type Level int
+const (
+    LevelNone Level = iota
+    LevelRead
+    LevelWrite
+)
+
+type PermissionSet struct {
+    Declared bool
+    All      string
+    Scopes   map[string]source.Positioned[Level]
+    Pos      source.Position
+}
+
+type RefKind int
+const (
+    RefUnknown RefKind = iota
+    RefSHA
+    RefMutable
+)
+
+type ActionRef struct {
+    Raw        string
+    Owner      string
+    Repo       string
+    Path       string
+    Ref        string
+    Kind       RefKind
+    Local      bool
+    Docker     bool
+    DockerImage string
+    FirstParty bool
+    Pos        source.Position
+}
+func (a *ActionRef) Identity() string
+
+type ReusableRef struct {
+    Raw   string
+    Local bool
+    Owner string
+    Repo  string
+    Path  string
+    Ref   string
+    Kind  RefKind
+    Pos   source.Position
+}
+```
+
+`Jobs`는 YAML에 나타난 순서를 유지한다. `Filters`의 키는 다음 집합으로 제한한다: `branches`, `branches-ignore`, `tags`, `tags-ignore`, `paths`, `paths-ignore`, `types`, `workflows`.
+
+### 6.2 정규화 규칙
+
+- **트리거.** `on: push` → 이벤트 하나. `on: [push, pull_request]` → 각각. `on: {event: null | mapping}` → 각각. `types`는 스칼라와 리스트 모두 받는다. `schedule`은 `- cron: '...'` 목록을 `Crons`로 옮긴다. `workflow_dispatch.inputs`와 `workflow_call.inputs`의 키를 정렬해서 `Inputs`에 넣는다.
+- **needs.** 스칼라와 리스트 모두 받는다.
+- **runs-on.** 스칼라는 라벨 하나, 시퀀스는 라벨 목록, 매핑은 `group`과 `labels`다. 값에 `${{`가 있으면 `Dynamic = true`다.
+- **permissions.** `read-all`, `write-all`은 `All`에 넣는다. `{}`는 `Declared = true`에 스코프가 비어 있다는 뜻(전부 none)이다. 매핑은 스코프별 `read`, `write`, `none`이다. 알 수 없는 레벨은 `MODEL-UNKNOWN-PERMISSION-LEVEL` 진단이다. 알 수 없는 스코프 이름은 그대로 보존한다. 블록이 없으면 `Declared = false`다.
+- **environment.** 스칼라 또는 `{name, url}`의 `name`이다.
+- **concurrency.** 스칼라는 `Group`, 매핑은 `group`과 `cancel-in-progress`다.
+- **timeout-minutes, continue-on-error, fail-fast, max-parallel.** 표현식일 수 있으므로 원문 문자열로 보존한다.
+- **container.** 스칼라 또는 `{image}`다. **services**는 서비스 이름을 정렬한 목록이다.
+- **job `uses`.** `./`로 시작하면 `Local`이다. 아니면 `owner/repo/path@ref`로 분해한다. `secrets: inherit`면 `SecretsInherit = true`이고, 매핑이면 키를 정렬해서 `SecretNames`에 넣는다.
+- **step `uses`.**
+  - `./` 또는 `.\`로 시작 → `Local`
+  - `docker://`로 시작 → `Docker`, `DockerImage`
+  - 그 외 `owner/repo[/path]@ref`. `@`가 없으면 `MODEL-ACTION-NO-REF` 진단이고 `Kind = RefUnknown`
+  - `Ref`가 대소문자 무관 `^[0-9a-f]{40}$`면 `RefSHA`, 아니면 `RefMutable`. 태그와 브랜치는 정적으로 구분할 수 없으므로 구분하지 않는다
+  - `Owner`가 대소문자 무관으로 `actions` 또는 `github`면 `FirstParty`
+  - `Identity()`는 `lower(owner/repo)`에 path가 있으면 `/lower(path)`를 붙인 값이다. Local이면 경로, Docker면 `docker://이미지`다
+- **조건.** `if`는 `expr.ParseCondition`으로 파싱한다. 실패하면 `ParseErr`에 기록하고 `MODEL-EXPR-SYNTAX` 진단을 추가한다. 이 실패로 전체 파싱이 실패하지는 않는다.
+- **SecretRefs.** 문서의 모든 스칼라 **값**(키 제외)을 `Walk`로 순회해서, `expr.IsDynamic`이면 `ParseTemplate`로 파싱하고 `Context == "secrets"`인 참조의 첫 경로 세그먼트를 모은다. `*` 세그먼트와 `github_token`은 제외한다. 대문자로 정규화하고 정렬·중복 제거한다. 파싱 실패한 스칼라는 조용히 건너뛴다.
+
+### 6.3 진단 코드
+
+`MODEL-NO-ON`, `MODEL-NO-JOBS`, `MODEL-JOB-NOT-MAPPING`, `MODEL-STEP-NOT-MAPPING`, `MODEL-STEP-NO-ACTION`, `MODEL-ACTION-NO-REF`, `MODEL-EXPR-SYNTAX`, `MODEL-UNKNOWN-PERMISSION-LEVEL`. 진단은 파싱을 막지 않는다. 에러는 루트가 매핑이 아니거나 문서가 비었을 때만 `ErrNotWorkflow`로 반환한다.
+
+### 6.4 필수 테스트
+
+트리거 세 형태, 필터와 types 스칼라·리스트, 스케줄, dispatch 입력, needs 두 형태, runs-on 세 형태와 동적 라벨, permissions 네 형태, 액션 참조 전 유형(원격, 경로 포함 원격, SHA 40자, 짧은 SHA는 Mutable, local, docker, @ 없음), FirstParty 판정, 재사용 워크플로 잡과 secrets inherit, 머지 키로 공유한 runs-on, 표현식 오류가 있는 if, 코퍼스 전체 파싱 무오류.
+
+---
+
+## 7. core/matrix
+
+### 7.1 API
+
+```go
+type Instance struct {
+    Values      map[string]any
+    FromInclude bool
+}
+
+type Diagnostic struct {
+    Code    string
+    Message string
+    Pos     source.Position
+}
+
+type Expansion struct {
+    Axes          []string
+    Instances     []Instance
+    Count         int
+    Materialized  bool
+    Dynamic       bool
+    DynamicReason string
+    Diagnostics   []Diagnostic
+}
+
+const GitHubJobLimit = 256
+const MaterializeLimit = 100000
+
+func Expand(matrix *source.Node) (*Expansion, error)
+```
+
+`Expand(nil)`는 `Count = 1`, `Instances = [{}]`, `Materialized = true`를 반환한다(매트릭스 없는 잡).
+
+### 7.2 의미론 — GitHub 공식 규칙을 그대로 구현한다
+
+1. **값 변환.** `!!int` → `int64`, `!!float` → `float64`, `!!bool` → `bool`, `!!null` → `nil`, 나머지 스칼라 → `string`, 매핑 → `map[string]any`, 시퀀스 → `[]any`. 값의 동등성은 키를 정렬한 정규 JSON 문자열 비교로 판정한다(타입 엄격). 이 선택을 결정 사항으로 기록한다.
+2. **축.** `include`와 `exclude`를 제외한 키가 축이다. 축 순서는 YAML 선언 순서다.
+3. **기본 조합.** 축의 데카르트 곱이다. **첫 번째 축이 가장 바깥 루프**다. 예: `version: [10, 12]`, `os: [a, b]` → `{10,a}, {10,b}, {12,a}, {12,b}`. 축이 하나라도 빈 리스트면 기본 조합은 0개이고 `MATRIX-EMPTY-AXIS` 진단이다. **축이 0개면 기본 조합은 0개다**(빈 조합 하나가 아니다). 축도 include도 없으면 `Count = 0`이고 `MATRIX-EMPTY` 진단이다.
+4. **exclude.** 기본 조합에만 적용한다. exclude 항목의 모든 키:값이 조합과 일치하면(부분 일치) 그 조합을 제거한다.
+5. **include.** exclude 이후 순서대로 처리한다. 각 include 객체에 대해 다음을 수행한다.
+   - **병합 후보는 기본 조합(exclude 적용 후)뿐이다.** include가 새로 만든 조합은 이후 include의 병합 후보가 아니다.
+   - 객체의 키 중 축 키에 해당하는 것이 모두 그 기본 조합의 값과 같으면(즉 원래 축 값을 하나도 덮어쓰지 않으면) 객체의 키:값 쌍을 그 조합에 전부 추가한다. 이전 include가 추가한 비축 키는 덮어쓴다.
+   - 병합된 기본 조합이 하나도 없으면 객체 자체를 새 조합으로 끝에 추가한다(`FromInclude = true`).
+   - 중복 제거는 하지 않는다.
+   - 참조: GitHub 문서의 설명은 "`{fruit: banana, animal: cat}`은 `{fruit: banana}` 조합에 추가되지 않는다. 그 조합은 원래 매트릭스 조합이 아니기 때문이다"이다. 7.3 골든이 이 규칙을 검증한다.
+6. **동적.** 다음 중 하나면 `Dynamic = true`, `Count = 0`, `Materialized = false`이고 사유를 기록한다: 매트릭스 노드 자체가 `${{`를 포함한 스칼라, 축 값 전체가 `${{` 스칼라(예: `os: ${{ fromJSON(...) }}`), `include` 또는 `exclude`가 `${{` 스칼라. 리스트 **원소** 하나가 표현식인 경우(`os: [ubuntu, ${{ vars.X }}]`)는 원소 하나로 세며 동적이 아니다.
+7. **크기 제한.** 기본 조합 수(곱)가 `MaterializeLimit`을 넘으면 실체화하지 않는다. `Count = 곱`, `Materialized = false`, `MATRIX-TOO-LARGE` 진단이다. `Count > GitHubJobLimit`이면 `MATRIX-OVER-LIMIT` 진단이다.
+
+### 7.3 필수 골든 테스트
+
+**GitHub 문서 예제 (include).**
+
+```yaml
+fruit: [apple, pear]
+animal: [cat, dog]
+include:
+  - color: green
+  - color: pink
+    animal: cat
+  - fruit: apple
+    shape: circle
+  - fruit: banana
+  - fruit: banana
+    animal: cat
+```
+
+기대값은 순서까지 정확히 다음 6개다.
+
+```
+{fruit: apple, animal: cat, color: pink, shape: circle}
+{fruit: apple, animal: dog, color: green, shape: circle}
+{fruit: pear, animal: cat, color: pink}
+{fruit: pear, animal: dog, color: green}
+{fruit: banana}
+{fruit: banana, animal: cat}
+```
+
+**exclude 예제.** `os: [macos-latest, windows-latest]`, `version: [12, 14, 16]`, `environment: [staging, production]`, `exclude: [{os: macos-latest, version: 12, environment: production}, {os: windows-latest, version: 16}]` → `Count = 9`.
+
+그 외: 축 없이 include만(각 항목이 조합), 빈 축, 동적 네 형태, 원소 하나만 표현식, 257개 조합의 제한 초과, 곱이 10만을 넘는 경우 비실체화, 객체 값 축, 정수와 문자열 `18` vs `'18'` 구분, 퍼즈.
+
+---
+
+## 8. core/graph
+
+```go
+type Edge struct{ From, To string }
+
+type Graph struct {
+    Jobs       []string
+    Needs      map[string][]string
+    Dependents map[string][]string
+    Levels     map[string]int
+    Cycles     [][]string
+    Unresolved []Edge
+}
+
+func Build(w *model.Workflow) *Graph
+func (g *Graph) Depth() int
+func (g *Graph) Width(weights map[string]int) int
+func (g *Graph) CriticalPath(durations map[string]time.Duration) ([]string, time.Duration, bool)
+```
+
+- `Jobs`는 정렬한다. 존재하지 않는 잡을 가리키는 `needs`는 `Unresolved`에 넣고 간선에서 제외한다.
+- 순환은 DFS 3색으로 찾는다. 각 순환은 사전순 최소 잡에서 시작하도록 회전하고, 순환 목록 전체를 정렬한다. 순환에 속한 잡은 `Levels`에서 제외한다.
+- 레벨은 의존이 없는 잡이 0이고, 나머지는 `max(의존 잡 레벨) + 1`이다.
+- `Depth()`는 `max(Level) + 1`이다. 잡이 없으면 0이다.
+- `Width(weights)`는 같은 레벨에 있는 잡 가중치 합의 최댓값이다. 가중치가 없는 잡은 1이다. semdiff는 매트릭스 인스턴스 수를 가중치로 넘긴다.
+- `CriticalPath`는 레벨 순서로 가중 최장 경로를 구한다. 경로상 잡 중 하나라도 duration이 없으면 세 번째 반환값이 false다. 동점은 사전순으로 깬다.
+- 테스트: 선형, 다이아몬드, 병렬, 미해결 needs, 자기 순환, 다중 순환, 가중 너비, 임계 경로, 결정성.
+
+---
+
+## 9. core/semdiff
+
+### 9.1 API
+
+```go
+type Status string
+const (
+    StatusAdded        Status = "added"
+    StatusRemoved      Status = "removed"
+    StatusModified     Status = "modified"
+    StatusRenamed      Status = "renamed"
+    StatusUnanalyzable Status = "unanalyzable"
+)
+
+type Significance int
+const (
+    Low Significance = iota
+    Normal
+    High
+)
+
+type Input struct {
+    Path      string
+    OldPath   string
+    Before    *model.Workflow
+    After     *model.Workflow
+    BeforeErr error
+    AfterErr  error
+}
+
+type DurationSource interface {
+    JobAverage(workflowPath, jobKey string) (time.Duration, int, bool)
+}
+
+type Options struct {
+    Durations      DurationSource
+    MinSamples     int
+}
+
+type Finding struct {
+    Kind         string
+    Significance Significance
+    Subject      string
+    Before       string
+    After        string
+    Detail       string
+    Pos          source.Position
+    BasePos      source.Position
+}
+
+type Metrics struct {
+    JobsPerRun     string
+    Depth          int
+    Width          int
+    RunnerMinutes  string
+}
+
+type Estimate struct {
+    MinutesBefore float64
+    MinutesAfter  float64
+    Samples       int
+}
+
+type FileDiff struct {
+    Path     string
+    OldPath  string
+    Status   Status
+    Before   Metrics
+    After    Metrics
+    Findings []Finding
+    Estimate *Estimate
+    Error    string
+}
+
+func Compare(in Input, opts Options) *FileDiff
+func JobKey(j *model.Job) string
+func NormalizeRunJobName(name string) (string, bool)
+func CronRunsPerDay(expr string) (int, bool, bool)
+```
+
+- `MinSamples` 기본값은 5다(0이면 5로 취급).
+- **직렬화.** `source.Position`, `semdiff`의 모든 공개 구조체에 snake_case `json` 태그를 붙인다. `Significance`는 `MarshalText`로 `low`, `normal`, `high`를 낸다. 골든 `expected.json`은 `json.MarshalIndent(fileDiff, "", "  ")` 결과에 개행 하나를 붙인 것이다.
+- `Before`가 nil이고 `BeforeErr`가 nil이면 추가된 파일이다. `After`도 같은 규칙이다. 한쪽에 에러가 있으면 `StatusUnanalyzable`이고 `Error`에 메시지를 담는다. 그래도 가능한 쪽의 Metrics는 채운다.
+- `JobKey`: 잡 `name`이 있고 `${{`가 없으면 그 값, 아니면 잡 ID다. 반환 전에 `NormalizeRunJobName`과 같은 괄호 접미사 제거를 적용한다. 저장 쪽 키와 조회 쪽 키가 같은 규칙을 거치게 하기 위해서다.
+- `NormalizeRunJobName`: GitHub 실행 잡 이름에서 끝의 ` (...)` 매트릭스 접미사를 제거한다. ` / `를 포함하면(재사용 워크플로 호출) false를 반환한다.
+- `CronRunsPerDay`: 5필드 cron을 받는다. 반환값은 (하루 실행 횟수, 모든 날에 실행되는지, 해석 성공). 분·시 필드는 `*`, `*/n`, `a`, `a-b`, `a-b/n`, 쉼표 목록을 지원한다. 일·월·요일 필드가 모두 `*`면 두 번째 값이 true다. 이름 표기(`MON`, `JAN`)나 형식 오류는 해석 실패다. 패닉하지 않는다.
+
+### 9.2 Metrics
+
+- `JobsPerRun`: 모든 잡의 매트릭스 인스턴스 수 합. 재사용 워크플로를 호출하는 잡(`uses`)은 호출 대상 내부를 볼 수 없으므로 자신의 매트릭스 인스턴스 수만큼 센다(매트릭스 없으면 1). 동적 매트릭스가 하나라도 있으면 `"?"`, 비실체화 상한이면 `"≥N"`. 그 외 10진 정수.
+- `Depth`, `Width`: graph에서 계산한다. Width 가중치는 인스턴스 수이고, 동적은 1로 센다.
+- `RunnerMinutes`: 추정이 가능할 때만 `"%.0f"`, 아니면 빈 문자열.
+
+### 9.3 추정
+
+- 각 잡의 인스턴스 수 × `JobAverage(path, JobKey(job))`의 합이다.
+- 전후 **모든** 잡이 `MinSamples` 이상의 샘플을 갖고, 동적 매트릭스가 없을 때만 계산한다. 하나라도 부족하면 `Estimate = nil`이다. 부분 추정은 하지 않는다.
+- 달러로 환산하지 않는다. 분 단위만 쓴다.
+
+### 9.4 Finding 목록 (Kind, 중요도, 영어 문구)
+
+문구의 `{}`는 해당 값으로 치환한다. 코드 식별자는 백틱으로 감싼다.
+
+| Kind | 중요도 | 문구 |
+|---|---|---|
+| `workflow.added` | Normal | Workflow added |
+| `workflow.removed` | Normal | Workflow removed |
+| `workflow.renamed` | Low | Workflow renamed from `{before}` |
+| `workflow.unanalyzable` | Normal | Could not analyze: {detail} |
+| `trigger.added` | Normal | Trigger added: `{subject}` |
+| `trigger.removed` | Normal | Trigger removed: `{subject}` |
+| `trigger.filter_changed` | Normal | `{subject}` `{detail}` filter: {before} → {after} |
+| `trigger.schedule_changed` | Normal | Schedule: {before} → {after} |
+| `trigger.pull_request_target_added` | High | Trigger added: `pull_request_target` (runs with base repository permissions and secrets) |
+| `job.added` | Normal | Job added: `{subject}` |
+| `job.removed` | Normal | Job removed: `{subject}` |
+| `job.renamed` | Low | Job `{before}` renamed to `{after}` |
+| `job.runner_changed` | Normal | Job `{subject}` runs-on: {before} → {after} |
+| `job.timeout_changed` | Low | Job `{subject}` timeout-minutes: {before} → {after} |
+| `job.concurrency_changed` | Low | Job `{subject}` concurrency: {before} → {after} |
+| `matrix.count_changed` | 비율 ≥ 2 또는 ≤ 0.5면 High, 아니면 Normal | Job `{subject}` matrix: {before} → {after} jobs |
+| `matrix.dynamic` | Normal | Job `{subject}` matrix is computed at runtime; job count unknown |
+| `matrix.over_limit` | High | Job `{subject}` matrix expands to {after} jobs (GitHub limit: 256) |
+| `graph.depth_changed` | Normal | Longest `needs` chain: {before} → {after} jobs |
+| `graph.width_changed` | Normal | Max concurrent jobs: {before} → {after} |
+| `graph.cycle` | High | `needs` cycle: {detail} |
+| `graph.unresolved` | Normal | Job `{subject}` needs unknown job `{after}` |
+| `permissions.broadened` | High | `{detail}` permission ({subject}): `{before}` → `{after}` |
+| `permissions.narrowed` | Low | `{detail}` permission ({subject}): `{before}` → `{after}` |
+| `permissions.write_all` | High | `permissions: write-all` set on {subject} |
+| `permissions.removed` | High | `permissions` removed from {subject}; repository default applies |
+| `permissions.declared` | Low | `permissions` declared on {subject} |
+| `secrets.added` | Normal | New secret referenced: `{subject}` |
+| `secrets.inherit_added` | High | Job `{subject}` passes all secrets to `{after}` (`secrets: inherit`) |
+| `action.added` | Low | Action added: `{subject}@{after}` |
+| `action.removed` | Low | Action removed: `{subject}` |
+| `action.third_party_added` | High | New third-party action: `{subject}@{after}`{detail} |
+| `action.ref_changed` | Normal | `{subject}`: `{before}` → `{after}` |
+| `action.pin_removed` | High | `{subject}` changed from commit SHA to mutable ref `{after}` |
+| `estimate.changed` | 변화율 ≥ 50%면 High, 아니면 Normal | Estimated runner minutes per run: {before} → {after} ({detail} historical runs per job) |
+
+세부 규칙:
+
+- `{subject}`의 스코프 표기는 워크플로 수준이면 `workflow`, 잡 수준이면 `job `+"`id`"다.
+- `action.third_party_added`의 `{detail}`은 Mutable이면 ` (mutable ref)`, SHA면 빈 문자열이다. 같은 액션에 대해 `action.added`와 중복 보고하지 않는다(서드파티면 third_party_added만).
+- 액션 비교 단위는 `Identity()`다. 같은 Identity가 여러 스텝에 있으면 ref 집합으로 비교한다. 집합은 정렬해서 `, `로 연결해 표기한다.
+- `secrets.added`는 전후 `Workflow.SecretRefs`의 차집합이다.
+- 필터 변경 문구의 before/after는 값을 정렬해 `, `로 연결한다. 값이 없으면 `(none)`이다.
+- **권한 비교 규칙.**
+  - 비교 단위는 워크플로 수준 하나와, 전후 모두 존재하는 잡 각각이다.
+  - 전에 선언, 후에 미선언 → `permissions.removed`. 전에 미선언, 후에 선언 → `permissions.declared`. 둘 다 미선언이면 비교하지 않는다.
+  - 둘 다 선언이면 레벨 순서 `none < read < write`로 스코프별 비교한다. `read-all`은 모든 스코프가 read, `write-all`은 모든 스코프가 write인 것으로 펼친다. 비교할 스코프 이름 집합은 GitHub 공식 스코프 목록(`actions`, `attestations`, `checks`, `contents`, `deployments`, `discussions`, `id-token`, `issues`, `models`, `packages`, `pages`, `pull-requests`, `repository-projects`, `security-events`, `statuses`)과 전후에 명시된 스코프의 합집합이다. 명시되지 않은 스코프는 none이다.
+  - 후의 `All`이 `write-all`이고 전이 아니면 `permissions.write_all` 하나만 내고 해당 단위의 스코프별 broadened는 내지 않는다.
+- **위치.** 각 Finding의 `Pos`는 가장 구체적인 대상 노드다. 매트릭스는 `strategy.matrix` 노드, 권한은 해당 스코프 값 노드(없으면 `permissions` 노드), 액션은 해당 스텝의 `uses` 값 노드, 잡 단위는 잡 ID 키 노드, 트리거는 `on` 아래 이벤트 키 노드, 추정·그래프는 워크플로 루트의 `jobs` 키 노드다.
+- 스케줄 문구: `'0 * * * *' (24 runs/day)` 형식으로 표기한다. 모든 날 실행이 아니면 `(N runs on matching days)`, 해석 실패면 cron 문자열만 쓴다.
+- `graph.width_changed`와 `graph.depth_changed`는 값이 다를 때만 만든다.
+- 포맷 변경만 있는 경우(플로우 ↔ 블록, 따옴표, 주석, 키 순서, 앵커 도입)에는 Finding이 **0개**여야 한다.
+
+### 9.5 잡 이름 변경 탐지
+
+1. before에만 있는 잡 집합 R과 after에만 있는 잡 집합 A를 만든다.
+2. 스텝 시그니처는 `uses` Identity 또는 `run` 첫 비공백 줄의 문자열이다. 잡마다 시그니처 멀티셋을 만든다.
+3. R × A 모든 쌍의 Jaccard 계수를 계산한다. 0.7 이상인 쌍을 점수 내림차순, 동점이면 (before ID, after ID) 사전순으로 탐욕적으로 1:1 매칭한다.
+4. 매칭된 쌍은 `job.renamed` 하나로 보고하고, 이후 모든 잡 수준 비교를 매칭된 쌍에 대해 수행한다. 매칭되지 않은 것만 `job.added`, `job.removed`가 된다.
+5. 스텝이 없는 잡(재사용 호출)은 `Uses` 원문이 같을 때만 매칭한다.
+
+### 9.6 정렬
+
+Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전순, Before, After) 순으로 정렬한다.
+
+### 9.7 위치
+
+`Pos`는 after 문서의 해당 노드 위치다. after에 없는 대상(제거된 것)은 영값이고 `BasePos`에 before 위치를 넣는다.
+
+### 9.8 필수 골든 테스트
+
+`testdata/golden/semdiff/<case>/` 아래 `before.yml`, `after.yml`, `expected.json`을 둔다. 파일이 없는 쪽은 `before.yml`이나 `after.yml`을 두지 않는다. 최소 케이스는 다음과 같다.
+
+1. `identical`
+2. `reformatted` (플로우 ↔ 블록, 따옴표, 주석, 키 순서, 앵커 도입) → Finding 0
+3. `matrix-axis-added` (6 → 24)
+4. `matrix-include-docs` (7.3의 문서 예제를 잡 매트릭스로)
+5. `matrix-exclude` (12 → 9)
+6. `matrix-dynamic`
+7. `matrix-over-limit`
+8. `permissions-broadened` (contents read → write)
+9. `permissions-removed`
+10. `permissions-write-all`
+11. `third-party-action-mutable`
+12. `action-pin-removed` (SHA → 태그)
+13. `action-major-bump` (v4 → v5)
+14. `schedule-added` (`0 * * * *`)
+15. `pull-request-target-added`
+16. `job-renamed` (스텝 동일) → renamed 1건만
+17. `job-added-depth` (needs 추가로 깊이 변화)
+18. `needs-cycle`
+19. `secrets-new-and-inherit`
+20. `runner-macos-added`
+21. `workflow-added`
+22. `workflow-removed`
+23. `head-unparseable`
+24. `anchor-shared-change` (앵커 안의 runs-on 변경이 두 잡에 모두 반영)
+25. `estimate-with-history` (가짜 DurationSource로 샘플 충분)
+26. `estimate-insufficient` (샘플 4개 → 추정 없음)
+
+**속성 테스트:** 코퍼스의 모든 파일에 대해 `Compare(a, a)`의 Finding이 0개다. 코퍼스의 인접 파일 쌍 `(a, b)`에 대해 다음 대응쌍마다 `Compare(a, b)`의 왼쪽 개수와 `Compare(b, a)`의 오른쪽 개수가 같다: (`trigger.added`, `trigger.removed`), (`job.added`, `job.removed`), (`action.added` + `action.third_party_added`, `action.removed`), (`workflow.added`, `workflow.removed`). `job.renamed` 개수는 양방향이 같다. 퍼즈: 임의 YAML 두 개로 패닉하지 않는다.
+
+---
+
+## 10. core/report
+
+```go
+type Meta struct {
+    HeadSHA      string
+    SkippedFiles int
+}
+
+type Annotation struct {
+    Path        string
+    StartLine   int
+    EndLine     int
+    StartColumn int
+    EndColumn   int
+    Level       string
+    Title       string
+    Message     string
+}
+
+const CommentMarker = "<!-- quanto:summary -->"
+const MaxBodyRunes = 60000
+
+func Publishable(diffs []*semdiff.FileDiff) bool
+func Message(f semdiff.Finding) string
+func Markdown(diffs []*semdiff.FileDiff, meta Meta) string
+func CheckSummary(diffs []*semdiff.FileDiff, meta Meta) (title, summary string)
+func Annotations(diffs []*semdiff.FileDiff) []Annotation
+func Text(diffs []*semdiff.FileDiff) string
+func JSON(diffs []*semdiff.FileDiff, meta Meta) ([]byte, error)
+```
+
+- `Publishable`: Normal 이상 Finding이 하나라도 있으면 true다.
+- `Message`: 9.4 표의 문구를 만든다.
+- `Markdown`의 형식은 다음과 같다. 파일은 경로 사전순이다. 표는 Metrics 값이 전후로 하나라도 다를 때만 넣는다. 추정 행은 양쪽 값이 있을 때만 넣는다. Low Finding은 코멘트에 넣지 않는다.
+
+```
+<!-- quanto:summary -->
+## quanto
+
+Execution changes in 1 workflow file.
+
+### `.github/workflows/ci.yml`
+
+| Metric | Before | After |
+|---|---:|---:|
+| Jobs per run | 7 | 25 |
+| Longest `needs` chain | 3 | 3 |
+| Max concurrent jobs | 2 | 4 |
+| Est. runner minutes per run | 43 | 172 |
+
+- Job `test` matrix: 6 → 24 jobs
+- `contents` permission (workflow): `read` → `write`
+- New third-party action: `peter-evans/create-pull-request@v6` (mutable ref)
+
+---
+<sub>Static analysis of workflow files only. No code from this pull request was executed. Commit `abc1234`.</sub>
+```
+
+- 파일 수는 단수·복수를 맞춘다(`1 workflow file`, `2 workflow files`).
+- 파일이 부재한 쪽(추가·삭제·분석 불가)의 표 셀은 `—`다. 추정 행은 양쪽 값이 모두 있을 때만 넣는다.
+- `SkippedFiles > 0`이면 푸터 앞에 `{n} additional workflow files were not analyzed.` 줄을 넣는다.
+- 커밋은 `HeadSHA` 앞 7자다.
+- 본문이 `MaxBodyRunes`를 넘으면 마지막 파일부터 통째로 빼고 `{n} files omitted due to size.` 줄을 넣는다. 파일 중간에서 자르지 않는다.
+- `CheckSummary`: Finding이 없으면 title은 `No execution changes`, summary는 분석한 파일 목록이다. 있으면 title은 `{n} execution changes` (Low 포함 전체 개수)이고, summary는 Markdown과 같은 구조에 Low를 포함하고 마커를 뺀 것이다.
+- `Annotations`: `Pos.Valid()`인 Finding만 대상이다. Level은 항상 `notice`다. Title은 Kind다. 시작과 종료가 같은 줄일 때만 컬럼을 채우고, 아니면 컬럼은 0이다.
+- `JSON`: 최상위 `{"schema": "quanto.diff/v1", "head_sha": ..., "skipped_files": ..., "files": [...]}`. 필드명은 snake_case다. 들여쓰기 2칸, 끝에 개행 하나.
+- `Text`: CLI용 평문이다. 색상 코드 없음. 파일별로 경로 줄, 지표 변화 줄, Finding 목록(Low 포함)을 출력한다.
+- 골든 테스트: semdiff 골든 케이스 각각에 대해 `expected.md`와 `expected.txt`를 추가한다.
+
+---
+
+## 11. cmd/quanto (CLI)
+
+`flag` 패키지로 서브커맨드를 구현한다. 종료 코드는 성공 0, 실행 오류 1, 사용법 오류 2다. 버전은 `-ldflags "-X main.version=..."`로 주입하고 기본값은 `dev`다.
+
+| 명령 | 동작 |
+|---|---|
+| `quanto version` | 버전 출력 |
+| `quanto inspect <file> [--format text\|json]` | 트리거, 권한, 잡별 인스턴스 수, runs-on, 액션 목록, 그래프 깊이·너비, 모델 진단 출력 |
+| `quanto diff <before> <after> [--format text\|markdown\|json] [--path <name>]` | 두 파일을 비교한다. 경로가 `/dev/null`이거나 빈 파일이면 부재로 취급한다. `--path`의 기본값은 after 경로(없으면 before 경로)다 |
+| `quanto serve --role web\|worker\|all` | 페이즈 6에서 추가 |
+| `quanto migrate` | 페이즈 6에서 추가 |
+| `quanto manifest --webhook-url <url> --homepage-url <url> [--name quanto]` | 페이즈 7에서 추가. GitHub App manifest JSON 출력 |
+
+CLI 테스트는 `internal/cli`에서 `Run(args []string, stdout, stderr io.Writer) int` 형태로 호출해서 검증한다.
+
+---
+
+## 12. internal/config
+
+| 변수 | 필수 | 기본값 | 용도 |
+|---|---|---|---|
+| `QUANTO_DATABASE_URL` | serve, migrate | — | PostgreSQL DSN |
+| `QUANTO_LISTEN_ADDR` | — | `:8080` | web 역할 주소 |
+| `QUANTO_APP_ID` | serve | — | GitHub App ID |
+| `QUANTO_PRIVATE_KEY_FILE` | serve | — | App 개인키 PEM 파일 경로 |
+| `QUANTO_WEBHOOK_SECRET_FILE` | serve | — | 웹훅 시크릿 파일 경로 |
+| `QUANTO_GITHUB_API_URL` | — | `https://api.github.com` | API 기준 URL |
+| `QUANTO_WORKER_CONCURRENCY` | — | `4` | 워커 고루틴 수 (1~64) |
+| `QUANTO_ALLOW_PRIVATE_REPOS` | — | `false` | 비공개 저장소 분석 허용 |
+| `QUANTO_MAX_WORKFLOW_FILES` | — | `50` | PR당 분석 파일 상한 (1~200) |
+| `QUANTO_LOG_LEVEL` | — | `info` | debug, info, warn, error |
+
+시작 시 전부 검증하고 실패하면 모든 오류를 모아 한 번에 보고한다. 시크릿 파일은 끝 개행을 제거해서 읽는다. `Config`의 `String()`이나 로그 출력에서 시크릿 값은 `[redacted]`로 표시한다.
+
+---
+
+## 13. internal/github
+
+표준 라이브러리 `net/http`로 구현한다.
+
+- **App JWT (RS256).** 헤더는 `{"alg":"RS256","typ":"JWT"}`, 클레임은 `iat = now - 60s`, `exp = now + 540s`, `iss = App ID 문자열`이다. PEM은 PKCS#1과 PKCS#8 둘 다 받는다. base64url은 패딩 없이 쓴다.
+- **설치 토큰.** `POST /app/installations/{id}/access_tokens`. 설치 ID별로 메모리에 캐시하고, 만료 5분 전에 갱신한다. 같은 설치에 대한 동시 갱신은 하나로 합친다(설치 ID별 뮤텍스).
+- **공통 헤더.** `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: quanto/<version>`.
+- **타임아웃.** `http.Client.Timeout = 30s`이고 모든 호출에 context를 전달한다.
+- **페이지네이션.** `Link` 헤더의 `rel="next"`를 따라간다. `per_page=100`이다.
+- **에러.** 2xx가 아니면 `*APIError{Status, Message, DocumentationURL}`이다. 403이나 429이면서 `X-RateLimit-Remaining: 0`이거나 `Retry-After`가 있으면 `*RateLimitError{Reset time.Time}`이다(Retry-After 초 우선, 없으면 `X-RateLimit-Reset`).
+- **관찰 훅.** `Options.OnResponse func(status int, rateRemaining int)` 콜백으로 메트릭 패키지 의존 없이 관측을 연결한다.
+
+메서드:
+
+```go
+func (c *AppClient) App(ctx) (*App, error)
+func (c *AppClient) Installation(ctx, installationID int64) (*Client, error)
+
+func (c *Client) PullRequest(ctx, owner, repo string, number int) (*PullRequest, error)
+func (c *Client) PullRequestFiles(ctx, owner, repo string, number int) ([]PullRequestFile, error)
+func (c *Client) FileContent(ctx, owner, repo, path, ref string) ([]byte, bool, error)
+func (c *Client) CreateCheckRun(ctx, owner, repo string, run CheckRun) (int64, error)
+func (c *Client) UpdateCheckRun(ctx, owner, repo string, id int64, run CheckRun) error
+func (c *Client) IssueComments(ctx, owner, repo string, number int) ([]IssueComment, error)
+func (c *Client) CreateIssueComment(ctx, owner, repo string, number int, body string) (int64, error)
+func (c *Client) UpdateIssueComment(ctx, owner, repo string, id int64, body string) error
+func (c *Client) WorkflowRuns(ctx, owner, repo string, limit int) ([]WorkflowRun, error)
+func (c *Client) RunJobs(ctx, owner, repo string, runID int64) ([]RunJob, error)
+```
+
+- `PullRequestFiles`는 최대 3000개까지 읽는다. `PullRequestFile{Filename, PreviousFilename, Status}`.
+- `FileContent`는 `GET /repos/{o}/{r}/contents/{path}?ref={ref}`에 `Accept: application/vnd.github.raw+json`을 쓴다. 404면 `(nil, false, nil)`이다. 경로 세그먼트는 URL 이스케이프한다.
+- Check Run 어노테이션은 요청당 최대 50개다. 첫 요청에 50개를 담아 생성하고, 나머지는 `UpdateCheckRun`으로 50개씩 추가한다. `status: completed`, `conclusion: neutral`, `name: quanto`.
+- `CheckRun{HeadSHA, Title, Summary, Annotations []report.Annotation}`. `internal/github`는 `core/report`를 import해도 된다(반대 방향은 금지).
+- `WorkflowRuns`는 `status=completed`로 최신순 한 페이지만 읽는다.
+- `RunJobs`는 `filter=latest`다. `RunJob{ID, Name, Conclusion, StartedAt, CompletedAt, Labels}`.
+- 테스트는 `httptest.Server`로 모든 메서드, 페이지네이션, 404, 레이트 리밋 두 형태, JWT 서명 검증(테스트에서 생성한 RSA 키로 서명을 검증), 토큰 캐시 재사용과 갱신, 어노테이션 배치를 검증한다.
+
+---
+
+## 14. internal/store
+
+`pgxpool`을 쓴다. 마이그레이션은 `//go:embed migrations/*.sql`로 포함하고 파일명 순서대로 적용한다. 각 파일은 트랜잭션 하나로 적용하고, `schema_migrations(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`에 기록한다. 적용 전체를 `pg_advisory_lock(7310254)`로 감싸서 여러 인스턴스가 동시에 시작해도 안전하게 만든다. advisory lock은 세션 단위이므로 `pool.Acquire`로 얻은 **단일 연결** 위에서 잠금, 전 파일 적용, 해제를 모두 수행한다.
+
+### 14.1 스키마 (`0001_init.sql`)
+
+```sql
+CREATE TABLE installations (
+    id BIGINT PRIMARY KEY,
+    account_login TEXT NOT NULL,
+    account_type TEXT NOT NULL,
+    suspended BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE repositories (
+    id BIGINT PRIMARY KEY,
+    installation_id BIGINT NOT NULL REFERENCES installations(id) ON DELETE CASCADE,
+    owner TEXT NOT NULL,
+    name TEXT NOT NULL,
+    private BOOLEAN NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX repositories_installation ON repositories (installation_id);
+
+CREATE TABLE webhook_deliveries (
+    delivery_id TEXT PRIMARY KEY,
+    event TEXT NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE queue_jobs (
+    id BIGSERIAL PRIMARY KEY,
+    kind TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    dedupe_key TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'running', 'done', 'dead')),
+    attempts INT NOT NULL DEFAULT 0,
+    run_after TIMESTAMPTZ NOT NULL DEFAULT now(),
+    locked_at TIMESTAMPTZ,
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX queue_jobs_ready ON queue_jobs (run_after, id) WHERE status = 'pending';
+CREATE UNIQUE INDEX queue_jobs_dedupe ON queue_jobs (dedupe_key) WHERE dedupe_key IS NOT NULL AND status IN ('pending', 'running');
+
+CREATE TABLE analyses (
+    id BIGSERIAL PRIMARY KEY,
+    repository_id BIGINT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+    pr_number INT NOT NULL,
+    head_sha TEXT NOT NULL,
+    base_sha TEXT NOT NULL,
+    result JSONB NOT NULL,
+    finding_count INT NOT NULL,
+    check_run_id BIGINT,
+    duration_ms INT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX analyses_unique ON analyses (repository_id, pr_number, head_sha);
+
+CREATE TABLE pr_comments (
+    repository_id BIGINT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+    pr_number INT NOT NULL,
+    comment_id BIGINT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (repository_id, pr_number)
+);
+
+CREATE TABLE job_runs (
+    job_id BIGINT PRIMARY KEY,
+    repository_id BIGINT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+    run_id BIGINT NOT NULL,
+    workflow_path TEXT NOT NULL,
+    job_key TEXT NOT NULL,
+    runner_labels TEXT[] NOT NULL,
+    conclusion TEXT NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL,
+    completed_at TIMESTAMPTZ NOT NULL,
+    duration_seconds INT NOT NULL
+);
+CREATE INDEX job_runs_lookup ON job_runs (repository_id, workflow_path, job_key, completed_at DESC);
+
+CREATE TABLE job_stats (
+    repository_id BIGINT NOT NULL REFERENCES repositories(id) ON DELETE CASCADE,
+    workflow_path TEXT NOT NULL,
+    job_key TEXT NOT NULL,
+    avg_seconds INT NOT NULL,
+    p50_seconds INT NOT NULL,
+    sample_count INT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (repository_id, workflow_path, job_key)
+);
+```
+
+`analyses.result`에는 `report.JSON`의 결과만 저장한다. 워크플로 원문은 어떤 테이블에도 저장하지 않는다.
+
+### 14.2 큐 연산
+
+```go
+type QueueJob struct {
+    ID       int64
+    Kind     string
+    Payload  []byte
+    Attempts int
+}
+
+func (s *Store) Enqueue(ctx, kind string, payload any, dedupeKey string) (bool, error)
+func (s *Store) Dequeue(ctx) (*QueueJob, error)
+func (s *Store) Complete(ctx, id int64) error
+func (s *Store) Fail(ctx, id int64, cause error) error
+func (s *Store) Defer(ctx, id int64, until time.Time) error
+func (s *Store) ReapStale(ctx, olderThan time.Duration) (int64, error)
+func (s *Store) PendingCount(ctx) (int64, error)
+```
+
+- `Enqueue`: 중복 키 충돌은 에러가 아니라 `false`다. 빈 `dedupeKey`는 NULL이다. 부분 유니크 인덱스를 쓰므로 `ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL AND status IN ('pending', 'running') DO NOTHING` 형태로 인덱스 술어를 명시한다.
+- `Dequeue`: `status = 'pending' AND run_after <= now()`인 행 하나를 `ORDER BY run_after, id FOR UPDATE SKIP LOCKED`로 잡는다. `status = 'running'`, `locked_at = now()`, `attempts + 1`로 바꾼다. 없으면 `(nil, nil)`이다.
+- `Fail`: `attempts ≥ 5`면 `dead`, 아니면 `pending`이고 `run_after = now() + min(30s × 2^(attempts-1), 30m)`이다. `last_error`는 500자로 자른다.
+- `Defer`: 레이트 리밋용이다. `pending`으로 되돌리고 `run_after = until`, `attempts - 1`로 바꾼다.
+- `ReapStale`: `running`이면서 `locked_at`이 기준보다 오래된 행을 `pending`으로 되돌린다.
+
+### 14.3 기타 연산
+
+`DeliverySeen(ctx, id) (bool, error)`, `RecordDelivery(ctx, id, event) error` (`ON CONFLICT DO NOTHING`), `PruneDeliveries(ctx, olderThan)`, `UpsertInstallation`, `DeleteInstallation`, `SetInstallationSuspended`, `InstallationSuspended`, `UpsertRepositories`, `RemoveRepositories`, `SaveAnalysis` (`ON CONFLICT (repository_id, pr_number, head_sha) DO UPDATE`), `CommentID`, `SetCommentID`, `InsertJobRuns` (`ON CONFLICT DO NOTHING`), `RecomputeJobStats(ctx, repoID, workflowPath, jobKey)`, `Durations(repoID) semdiff.DurationSource`.
+
+- `RecomputeJobStats`: 해당 키의 `conclusion = 'success'` 최신 30건으로 평균, `percentile_cont(0.5)`, 개수를 계산해 upsert한다.
+- `Durations`: 저장소 하나의 `job_stats`를 한 번에 읽어 메모리 맵으로 된 `DurationSource`를 만든다. `JobAverage`는 `avg_seconds`와 `sample_count`를 반환한다.
+
+### 14.4 테스트
+
+`QUANTO_TEST_DATABASE_URL`이 없으면 skip한다. 테스트마다 무작위 이름의 스키마를 만들어 `search_path`로 격리하고 끝나면 삭제한다. 클라우드 세션에서 DB를 띄울 수 없으면, 통합 테스트는 푸시 후 GitHub Actions의 `integration` 잡에서 실행된 결과로 검증한다. 검증 항목: 마이그레이션 멱등성, 동시 마이그레이션(고루틴 두 개), 큐 중복 키, 동시 Dequeue에서 같은 작업을 두 번 잡지 않음(고루틴 8개 × 작업 100개), Fail 백오프와 dead 전이, Defer의 attempts 복구, ReapStale, 딜리버리 중복, 통계 재계산, cascade 삭제.
+
+---
+
+## 15. internal/app
+
+### 15.1 web 역할
+
+| 경로 | 동작 |
+|---|---|
+| `POST /webhook` | 아래 처리 |
+| `GET /healthz` | 항상 200 `ok` |
+| `GET /readyz` | DB ping 성공 시 200, 실패 시 503 |
+| `GET /metrics` | Prometheus |
+
+`POST /webhook` 처리 순서:
+
+1. `http.MaxBytesReader`로 본문을 25 MiB까지 읽는다.
+2. `X-Hub-Signature-256`이 `sha256=` + hex(HMAC-SHA256(secret, body))와 `hmac.Equal`로 일치하지 않으면 401이다. JSON 파싱 전에 검사한다.
+3. `X-GitHub-Event`나 `X-GitHub-Delivery`가 없으면 400이다.
+4. `DeliverySeen`이 true면 200 `duplicate`다.
+5. 이벤트별 처리:
+   - `ping` → 200
+   - `pull_request`의 `opened`, `synchronize`, `reopened` → 저장소가 비공개이고 허용되지 않았으면 204. 아니면 설치와 저장소를 upsert하고 `analyze_pr`를 enqueue한다. 중복 키는 `pr:{repo_id}:{number}:{head_sha}`. 202.
+   - `workflow_run`의 `completed` → 비공개 규칙이 같다. `workflow_run.path`에서 `@` 이후를 잘라낸 값을 `workflow_path`로 쓴다. `ingest_workflow_run`을 enqueue한다. 중복 키는 `run:{run_id}`. 202.
+   - `installation`의 `created` → 설치와 저장소 목록을 upsert하고, 허용된 저장소마다 `backfill_repo`를 enqueue한다(중복 키 `backfill:{repo_id}`). `deleted` → 설치를 삭제한다. `suspend`, `unsuspend` → 플래그를 갱신한다. 그 외 액션은 204.
+   - `installation_repositories`의 `added`, `removed` → upsert 또는 삭제. 추가된 저장소는 backfill을 enqueue한다.
+   - 그 외 이벤트 → 204.
+6. 처리가 성공한 뒤에만 `RecordDelivery`를 호출한다. 처리 중 DB 오류는 500이고 딜리버리를 기록하지 않는다(재전송 가능 상태 유지). 동시에 같은 딜리버리가 두 번 처리돼도 upsert와 큐 중복 키 때문에 결과는 같다.
+7. 웹 핸들러는 GitHub API를 호출하지 않는다.
+
+서버 설정: `ReadHeaderTimeout 10s`, `ReadTimeout 30s`, `WriteTimeout 30s`, `IdleTimeout 120s`. SIGINT와 SIGTERM에서 20초 그레이스풀 종료. `serve`의 모든 역할은 시작할 때 마이그레이션을 적용한다(advisory lock으로 동시 시작 안전).
+
+### 15.2 worker 역할
+
+- `QUANTO_WORKER_CONCURRENCY`개 고루틴이 `Dequeue`를 반복한다. 비어 있으면 1초 + 0~250ms 지터만큼 쉰다.
+- 1분마다 `ReapStale(10m)`, 1시간마다 `PruneDeliveries(7일)`, 15초마다 큐 깊이 게이지를 갱신한다.
+- 핸들러는 `recover`로 감싼다. 패닉은 Fail로 기록한다.
+- `*github.RateLimitError`면 `Defer(Reset + 0~30s 지터)`, 그 외 에러면 `Fail`, 성공이면 `Complete`다.
+- 종료 신호를 받으면 새 작업을 잡지 않고, 진행 중인 작업을 최대 60초 기다린다.
+
+### 15.3 `analyze_pr` 핸들러
+
+페이로드: `installation_id`, `repository_id`, `owner`, `repo`, `number`, `head_sha`, `base_sha`.
+
+1. 설치가 정지 상태면 완료 처리하고 끝낸다.
+2. 설치 클라이언트를 얻는다.
+3. `PullRequestFiles`를 읽는다. 워크플로 파일 판정은 정규식 `^\.github/workflows/[^/]+\.ya?ml$`를 `Filename`과 `PreviousFilename`에 적용한다. 해당 파일이 없으면 Check Run 없이 완료한다.
+4. 경로 사전순으로 정렬하고 `QUANTO_MAX_WORKFLOW_FILES`까지만 분석한다. 나머지 개수는 `Meta.SkippedFiles`다.
+5. 파일마다:
+   - `added` → before 없음. `removed` → after 없음. `renamed` → before는 `PreviousFilename`, `OldPath`를 설정.
+   - `FileContent`로 base는 `base_sha`, head는 `head_sha`에서 읽는다. 1 MiB를 넘으면 해당 쪽 에러는 `file exceeds 1 MiB`다.
+   - `source.Load` → `model.Parse`. 에러는 Input의 `BeforeErr`, `AfterErr`로 넘긴다.
+6. `store.Durations(repository_id)`로 DurationSource를 만든다.
+7. 파일별 `semdiff.Compare`.
+8. Check Run: `CheckSummary`와 `Annotations`로 생성한다. Finding이 없어도 생성한다.
+9. 코멘트 전에 `PullRequest`를 다시 읽는다. 현재 head SHA가 페이로드의 `head_sha`와 다르면 코멘트 단계를 건너뛴다.
+10. 코멘트 대상 ID는 `pr_comments` 캐시를 먼저 보고, 없으면 `IssueComments` 중 본문이 `CommentMarker`로 시작하고 작성자 login이 `{app slug}[bot]`인 것을 찾는다(App slug는 `App()` 결과를 프로세스 수명 동안 캐시).
+    - `Publishable`이면 있으면 수정, 없으면 생성하고 캐시에 기록한다.
+    - 아니면서 기존 코멘트가 있으면 `CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit ` + "`" + `{sha7}` + "`" + `.\n"`로 수정한다.
+    - 아니면서 기존 코멘트가 없으면 아무것도 하지 않는다.
+11. `SaveAnalysis`로 저장한다.
+
+### 15.4 `ingest_workflow_run` 핸들러
+
+페이로드: `installation_id`, `repository_id`, `owner`, `repo`, `run_id`, `workflow_path`.
+
+1. `workflow_path`가 `.github/workflows/`로 시작하지 않으면 완료 처리한다.
+2. `RunJobs`를 읽는다. `conclusion`이 `success` 또는 `failure`이고 시작·완료 시각이 모두 있으며 `NormalizeRunJobName`이 성공한 잡만 남긴다.
+3. `InsertJobRuns`로 저장하고, 영향받은 `(workflow_path, job_key)`마다 `RecomputeJobStats`를 호출한다.
+
+### 15.5 `backfill_repo` 핸들러
+
+`WorkflowRuns(limit 100)`을 읽고 각 run마다 `ingest_workflow_run`을 enqueue한다(중복 키 `run:{run_id}`).
+
+### 15.6 테스트
+
+- 웹: 서명 없음·오류·정상, 필수 헤더 누락, 딜리버리 중복, 이벤트별 enqueue 결과, 비공개 저장소 무시, 본문 크기 초과.
+- 워커 핸들러: 가짜 GitHub(`httptest`)와 실제 store(`QUANTO_TEST_DATABASE_URL` 필요)로 검증한다. 워크플로 변경 없음, 수정·추가·삭제·이름 변경, head 이동 시 코멘트 생략, 기존 코멘트 수정, 변화 없음으로 바뀐 경우의 문구, 어노테이션 51개 이상의 배치, 레이트 리밋 Defer, 이력 수집 필터링과 통계 재계산.
+- **종단 테스트** `internal/app/e2e_test.go`: 서명된 `pull_request` 웹훅 → web 핸들러 → 큐 → 워커 한 사이클 → 가짜 GitHub가 받은 Check Run 페이로드와 코멘트 본문을 골든 파일과 비교한다.
+
+---
+
+## 16. internal/metrics
+
+| 이름 | 종류 | 라벨 |
+|---|---|---|
+| `quanto_webhook_received_total` | counter | `event` |
+| `quanto_webhook_rejected_total` | counter | `reason` (`signature`, `headers`, `size`) |
+| `quanto_queue_jobs_total` | counter | `kind`, `result` (`done`, `failed`, `deferred`, `dead`) |
+| `quanto_queue_depth` | gauge | — |
+| `quanto_analysis_duration_seconds` | histogram | — |
+| `quanto_findings_total` | counter | `significance` |
+| `quanto_github_requests_total` | counter | `status_class` (`2xx`, `4xx`, `5xx`) |
+| `quanto_github_rate_limit_remaining` | gauge | — |
+
+전역 기본 레지스트리 대신 `prometheus.NewRegistry()`를 주입한다. Go 런타임 수집기와 프로세스 수집기를 등록한다.
+
+---
+
+## 17. 배포와 문서
+
+- `deploy/Containerfile`: 빌드 스테이지는 `docker.io/library/golang:<go.mod 버전>`, `CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}"`. 최종 스테이지는 `gcr.io/distroless/static-debian12:nonroot`. `ENTRYPOINT ["/quanto"]`.
+- `deploy/quadlet/`: `quanto.network`, `quanto-db.volume`, `quanto-db.container`(`docker.io/library/postgres:16`, `Secret=quanto-db-password`), `quanto-web.container`(`PublishPort=127.0.0.1:8080:8080`, `Exec=serve --role web`), `quanto-worker.container`(`Exec=serve --role worker`). App 개인키와 웹훅 시크릿은 Podman secret을 파일로 마운트하고 `*_FILE` 변수로 가리킨다. web과 worker는 db 뒤에 시작한다.
+- `quanto manifest`: GitHub App manifest JSON을 출력한다. `default_permissions`: `contents: read`, `checks: write`, `pull_requests: write`, `actions: read`, `metadata: read`. `default_events`: `pull_request`, `workflow_run`. `public: true`. `hook_attributes.url`과 `url`은 플래그 값이다. URL 형식을 검증한다.
+- `docs/github-app.md`: manifest 흐름으로 App을 만드는 절차, 개인키 다운로드, 설치 방법.
+- `docs/deploy.md`: Podman secret 생성 명령, Quadlet 파일 배치 경로(`~/.config/containers/systemd/`), `systemctl --user daemon-reload`와 시작, 리버스 프록시로 TLS를 종단해야 한다는 요구, 로컬 개발 시 웹훅 전달 방법.
+- `README.md`: 한 문단 소개, 실제 형식의 예시 코멘트, 요구 권한 표와 각 권한의 용도, 보안 정책(코드 미실행, 원문 미저장), CLI 사용법, 자체 호스팅 링크, 알려진 한계(정적 분석이 잡지 못하는 것, 추정의 전제, 잡 `name`에 표현식을 쓰거나 괄호 접미사가 겹치는 잡은 이력과 매칭되지 않아 추정이 생략된다는 점, 재사용 워크플로 내부는 보지 않는다는 점), 라이선스.
+
+---
+
+## 18. CI (`.github/workflows/ci.yml`)
+
+- 트리거: `push`와 `pull_request`. 워크플로 수준 `permissions: contents: read`.
+- `test` 잡: `ubuntu-latest`, checkout, `setup-go`(`go-version-file: go.mod`), `test -z "$(gofmt -l .)"`, `go vet ./...`, `go run scripts/check-comments.go`, `go test -race ./...`, `scripts/fetch-corpus.sh`, `go test -run Corpus ./...`, 퍼즈 대상마다 `-fuzztime=20s`.
+- `integration` 잡: `services.postgres`(`postgres:16`, 헬스체크 포함), `QUANTO_TEST_DATABASE_URL` 설정 후 `go test -race ./internal/...`.
+- 액션 참조는 `actions/checkout@v4`, `actions/setup-go@v5`를 쓴다.
+
+---
+
+## 19. Makefile
+
+타깃: `fmt-check`, `vet`, `comments`, `test`, `test-race`, `fuzz`, `corpus`, `build`, `image`, `check`(fmt-check, vet, comments, test-race를 차례로). `build`는 `bin/quanto`를 만든다. `bin/`과 `testdata/corpus/*.y*ml`은 `.gitignore`에 넣는다. 타깃은 그 타깃이 참조하는 대상이 존재하는 페이즈에서 추가한다.
+
+---
+
+## 20. 코퍼스 스크립트
+
+`scripts/fetch-corpus.sh`는 `curl -fsSL --max-time 20`으로 raw.githubusercontent.com에서 워크플로 파일을 받아 `testdata/corpus/`에 저장한다. 실패한 URL은 건너뛰고 `miss`를 출력한다. 마지막에 받은 파일 수를 출력한다. `set -u`를 쓰고 `set -e`는 쓰지 않는다. 대상은 최소 다음을 포함하고, 30개 이상 받는 것을 목표로 목록을 확장한다.
+
+```
+rust-lang/rust/master/.github/workflows/ci.yml
+nodejs/node/main/.github/workflows/build-tarball.yml
+nodejs/node/main/.github/workflows/test-linux.yml
+prometheus/prometheus/main/.github/workflows/ci.yml
+hashicorp/terraform/main/.github/workflows/checks.yml
+actions/checkout/main/.github/workflows/test.yml
+ollama/ollama/main/.github/workflows/test.yaml
+fastapi/fastapi/master/.github/workflows/test.yml
+vercel/next.js/canary/.github/workflows/build_and_test.yml
+```
+
+### 20.1 주석 검사
+
+`scripts/check-comments.go`는 첫 줄이 `//go:build ignore`인 독립 프로그램이다. 저장소 루트부터 모든 `.go` 파일(`testdata/` 제외)을 `go/parser.ParseFile(..., parser.ParseComments)`로 읽고, 주석 그룹의 각 주석이 `//go:build`, `//go:embed`, `//go:generate`로 시작하지 않으면 `파일:줄: comment` 형식으로 출력한다. 하나라도 있으면 종료 코드 1이다. 이 파일 자체도 규칙을 지킨다.
+
+---
+
+## 21. 페이즈 보고 형식
+
+페이즈를 끝낼 때 정확히 이 형식으로 보고하고 멈춘다.
+
+```
+## Phase N 보고
+
+### 브랜치와 커밋
+- 작업 브랜치 이름
+- 이번 페이즈 커밋 목록 (해시 7자 + 메시지)
+- 마지막 커밋이 원격에 푸시됐는지 (`git status`의 ahead/behind 결과)
+
+### 생성·수정한 파일
+- path — 한 줄 설명
+
+### 검증
+- gofmt: 통과/실패
+- go vet: 통과/실패
+- go test -race ./...: 통과/실패 (패키지별 결과 요약)
+- 추가 검증: 명령과 결과
+
+### 결정 사항
+- 명세가 모호했던 지점과 선택한 해석
+
+### 알려진 한계
+- 이 페이즈 범위에서 의도적으로 다루지 않은 것
+
+### 골든 파일 갱신
+- 갱신한 파일과 근거 (없으면 "없음")
+```
