@@ -115,9 +115,16 @@ type rawField struct {
 	val  *yaml.Node
 }
 
-func collectFields(m *yaml.Node, depth int) []rawField {
+func collectFields(m *yaml.Node) []rawField {
+	return collectFieldsMemo(m, 0, make(map[*yaml.Node][]rawField))
+}
+
+func collectFieldsMemo(m *yaml.Node, depth int, memo map[*yaml.Node][]rawField) []rawField {
 	if m == nil || m.Kind != yaml.MappingNode || depth > maxDepth {
 		return nil
+	}
+	if cached, ok := memo[m]; ok {
+		return cached
 	}
 	explicit := make(map[string]bool)
 	for i := 0; i+1 < len(m.Content); i += 2 {
@@ -142,7 +149,7 @@ func collectFields(m *yaml.Node, depth int) []rawField {
 			continue
 		}
 		for _, src := range mergeSources(v) {
-			for _, f := range collectFields(src, depth+1) {
+			for _, f := range collectFieldsMemo(src, depth+1, memo) {
 				if explicit[f.name] || seen[f.name] {
 					continue
 				}
@@ -151,6 +158,7 @@ func collectFields(m *yaml.Node, depth int) []rawField {
 			}
 		}
 	}
+	memo[m] = out
 	return out
 }
 
@@ -187,7 +195,7 @@ func (n *Node) Fields() []Field {
 	if n.Kind() != KindMapping {
 		return nil
 	}
-	raw := collectFields(n.val, 0)
+	raw := collectFields(n.val)
 	out := make([]Field, 0, len(raw))
 	for _, f := range raw {
 		p := childPath(n.path, f.name)
@@ -221,7 +229,7 @@ func (n *Node) lookupField(name string) (key, val *yaml.Node) {
 	if name == "<<" || !hasMerge(m) {
 		return nil, nil
 	}
-	for _, f := range collectFields(m, 0) {
+	for _, f := range collectFields(m) {
 		if f.name == name {
 			return f.key, f.val
 		}

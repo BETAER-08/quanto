@@ -585,3 +585,20 @@ func TestBOM(t *testing.T) {
 		t.Fatalf("BOM value text = %q", got)
 	}
 }
+
+func TestMergeFanOutIsBounded(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("m0: &m0 {k: v}\n")
+	for i := 1; i <= 60; i++ {
+		prev := "*m" + strconv.Itoa(i-1)
+		b.WriteString("m" + strconv.Itoa(i) + ": &m" + strconv.Itoa(i) + " {<<: [" + prev + ", " + prev + "], x" + strconv.Itoa(i) + ": 1}\n")
+	}
+	d := mustLoad(t, b.String())
+	n := d.Root().Field("m60")
+	if got := n.Len(); got != 61 {
+		t.Fatalf("m60 has %d fields, want 61", got)
+	}
+	if s, _ := n.Field("k").Str(); s != "v" {
+		t.Fatalf("m60.k = %q", s)
+	}
+}
