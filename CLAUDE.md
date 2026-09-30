@@ -875,6 +875,8 @@ Execution changes in 1 workflow file.
 | `quanto migrate` | 페이즈 6에서 추가 |
 | `quanto manifest --webhook-url <url> --homepage-url <url> [--name quanto]` | 페이즈 7에서 추가. GitHub App manifest JSON 출력 |
 
+`diff`의 종료 코드: 입력 파일을 읽지 못하면 1, 사용법 오류면 2, 그 외에는 파싱 실패로 `unanalyzable`이 나와도 0이다(분석 결과를 정상적으로 보고한 것이므로).
+
 CLI 테스트는 `internal/cli`에서 `Run(args []string, stdout, stderr io.Writer) int` 형태로 호출해서 검증한다.
 
 ---
@@ -1185,7 +1187,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 ## 18. CI (`.github/workflows/ci.yml`)
 
 - 트리거: `push`와 `pull_request`. 워크플로 수준 `permissions: contents: read`.
-- `test` 잡: `ubuntu-latest`, checkout, `setup-go`(`go-version-file: go.mod`), `test -z "$(gofmt -l .)"`, `go vet ./...`, `go run scripts/check-comments.go`, `go test -race ./...`, `scripts/fetch-corpus.sh`, `go test -run Corpus ./...`, 퍼즈 대상마다 `-fuzztime=20s`.
+- `test` 잡: `ubuntu-latest`, checkout, `setup-go`(`go-version-file: go.mod`), `test -z "$(gofmt -l .)"`, `go vet ./...`, `go run scripts/check-comments.go`, `go test -race ./...`, `scripts/fetch-corpus.sh`, `go test -run Corpus ./...`, 퍼즈 대상마다 `go test -run '^$' -fuzz <대상> -fuzztime 20s <패키지>`.
 - `integration` 잡: `services.postgres`(`postgres:16`, 헬스체크 포함), `QUANTO_TEST_DATABASE_URL` 설정 후 `go test -race ./internal/...`.
 - 액션 참조는 `actions/checkout@v4`, `actions/setup-go@v5`를 쓴다.
 
@@ -1193,7 +1195,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 
 ## 19. Makefile
 
-타깃: `fmt-check`, `vet`, `comments`, `test`, `test-race`, `fuzz`, `corpus`, `build`, `image`, `check`(fmt-check, vet, comments, test-race를 차례로). `build`는 `bin/quanto`를 만든다. `bin/`과 `testdata/corpus/*.y*ml`은 `.gitignore`에 넣는다. 타깃은 그 타깃이 참조하는 대상이 존재하는 페이즈에서 추가한다.
+타깃: `fmt-check`, `vet`, `comments`, `test`, `test-race`, `fuzz`, `corpus`, `build`, `image`, `check`(fmt-check, vet, comments, test-race를 차례로). `build`는 `bin/quanto`를 만든다. `.gitignore`에는 `bin/`, `testdata/corpus/*.yml`, `testdata/corpus/*.yaml`, `*.out`, `*.test`만 넣는다. `fuzz` 타깃은 `go test -run '^$' -fuzz <대상> -fuzztime <시간> <패키지>` 형식을 쓴다. 타깃은 그 타깃이 참조하는 대상이 존재하는 페이즈에서 추가한다.
 
 ---
 
