@@ -1,0 +1,5 @@
+bin/
+testdata/corpus/*.yml
+testdata/corpus/*.yaml
+*.out
+*.test
