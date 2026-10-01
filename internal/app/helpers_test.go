@@ -89,6 +89,7 @@ type fakeGitHub struct {
 	jobs     []map[string]any
 	limited  map[string]bool
 	broken   map[string]bool
+	slow     map[string]bool
 	checks   []*fakeCheckRun
 }
 
@@ -122,7 +123,7 @@ func decodeCheckBody(t *testing.T, r *http.Request) (string, int) {
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
-	f := &fakeGitHub{t: t, contents: map[string]string{}, headSHA: testHead, nextID: 5000, limited: map[string]bool{}, broken: map[string]bool{}}
+	f := &fakeGitHub{t: t, contents: map[string]string{}, headSHA: testHead, nextID: 5000, limited: map[string]bool{}, broken: map[string]bool{}, slow: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /app/installations/{id}/access_tokens", func(w http.ResponseWriter, r *http.Request) {
 		f.json(w, http.StatusCreated, map[string]any{"token": "ghs_test", "expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)})
@@ -263,8 +264,15 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		key := r.Method + " " + r.URL.Path
 		f.mu.Lock()
 		f.log = append(f.log, loggedRequest{Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery, Body: string(data)})
-		limited, broken := f.limited[key], f.broken[key]
+		limited, broken, slow := f.limited[key], f.broken[key], f.slow[key]
 		f.mu.Unlock()
+		if slow {
+			select {
+			case <-r.Context().Done():
+			case <-time.After(10 * time.Second):
+			}
+			return
+		}
 		if limited {
 			w.Header().Set("X-RateLimit-Remaining", "0")
 			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(time.Hour).Unix(), 10))

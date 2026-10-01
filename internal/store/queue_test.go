@@ -37,7 +37,7 @@ func TestEnqueueDedupe(t *testing.T) {
 	if err != nil || ok {
 		t.Fatalf("enqueue while running = %v, %v", ok, err)
 	}
-	if err := s.Complete(ctx, job.ID); err != nil {
+	if err := s.Complete(ctx, job.ID, job.Attempts); err != nil {
 		t.Fatalf("complete: %v", err)
 	}
 	ok, err = s.Enqueue(ctx, "analyze_pr", nil, "pr:1:2:abc")
@@ -119,7 +119,7 @@ func TestDequeueConcurrentExactlyOnce(t *testing.T) {
 				mu.Lock()
 				seen[job.ID]++
 				mu.Unlock()
-				if err := s.Complete(ctx, job.ID); err != nil {
+				if err := s.Complete(ctx, job.ID, job.Attempts); err != nil {
 					errs <- err
 					return
 				}
@@ -164,7 +164,7 @@ func TestFailBackoffAndDead(t *testing.T) {
 		if job.Attempts != attempt {
 			t.Fatalf("attempts = %d, want %d", job.Attempts, attempt)
 		}
-		if err := s.Fail(ctx, job.ID, errors.New(strings.Repeat("é", 600))); err != nil {
+		if err := s.Fail(ctx, job.ID, job.Attempts, errors.New(strings.Repeat("é", 600))); err != nil {
 			t.Fatalf("fail: %v", err)
 		}
 		st := readJob(t, s, job.ID)
@@ -199,21 +199,21 @@ func TestFailBackoffCap(t *testing.T) {
 		t.Fatalf("dequeue: %v, %v", job, err)
 	}
 	mustExec(t, s, "UPDATE queue_jobs SET attempts = 4, status = 'running'")
-	if err := s.Fail(ctx, job.ID, errors.New("boom")); err != nil {
+	if err := s.Fail(ctx, job.ID, 4, errors.New("boom")); err != nil {
 		t.Fatalf("fail: %v", err)
 	}
 	if st := readJob(t, s, job.ID); st.delay < 235 || st.delay > 241 {
 		t.Fatalf("delay = %.1f", st.delay)
 	}
-	mustExec(t, s, "UPDATE queue_jobs SET attempts = 3")
-	if err := s.Fail(ctx, job.ID, errors.New("boom")); err != nil {
+	mustExec(t, s, "UPDATE queue_jobs SET attempts = 3, status = 'running'")
+	if err := s.Fail(ctx, job.ID, 3, errors.New("boom")); err != nil {
 		t.Fatalf("fail: %v", err)
 	}
 	if st := readJob(t, s, job.ID); st.delay < 115 || st.delay > 121 {
 		t.Fatalf("delay = %.1f", st.delay)
 	}
-	mustExec(t, s, "UPDATE queue_jobs SET attempts = 0")
-	if err := s.Fail(ctx, job.ID, nil); err != nil {
+	mustExec(t, s, "UPDATE queue_jobs SET attempts = 0, status = 'running'")
+	if err := s.Fail(ctx, job.ID, 0, nil); err != nil {
 		t.Fatalf("fail: %v", err)
 	}
 	if st := readJob(t, s, job.ID); st.delay < 25 || st.delay > 31 || st.lastError != "" {
@@ -231,14 +231,14 @@ func TestKill(t *testing.T) {
 	if err != nil || job == nil {
 		t.Fatalf("dequeue: %v, %v", job, err)
 	}
-	if err := s.Kill(ctx, job.ID, errors.New("decode payload: bad json")); err != nil {
+	if err := s.Kill(ctx, job.ID, job.Attempts, errors.New("decode payload: bad json")); err != nil {
 		t.Fatalf("kill: %v", err)
 	}
 	st := readJob(t, s, job.ID)
 	if st.status != "dead" || st.attempts != 1 || st.lastError != "decode payload: bad json" {
 		t.Fatalf("state = %+v", st)
 	}
-	if err := s.Kill(ctx, 999999, errors.New("x")); !errors.Is(err, ErrNotFound) {
+	if err := s.Kill(ctx, 999999, 1, errors.New("x")); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("kill missing = %v", err)
 	}
 }
@@ -253,7 +253,7 @@ func TestDeferRestoresAttempts(t *testing.T) {
 	if err != nil || job == nil {
 		t.Fatalf("dequeue: %v, %v", job, err)
 	}
-	if err := s.Defer(ctx, job.ID, time.Now().Add(time.Hour)); err != nil {
+	if err := s.Defer(ctx, job.ID, job.Attempts, time.Now().Add(time.Hour)); err != nil {
 		t.Fatalf("defer: %v", err)
 	}
 	st := readJob(t, s, job.ID)
@@ -264,7 +264,7 @@ func TestDeferRestoresAttempts(t *testing.T) {
 	if err != nil || again != nil {
 		t.Fatalf("dequeue before until = %v, %v", again, err)
 	}
-	if err := s.Complete(ctx, 424242); !errors.Is(err, ErrNotFound) {
+	if err := s.Complete(ctx, 424242, 1); !errors.Is(err, ErrLeaseLost) {
 		t.Fatalf("complete missing = %v", err)
 	}
 }
@@ -295,6 +295,92 @@ func TestReapStale(t *testing.T) {
 	}
 	if st := readJob(t, s, b.ID); st.status != "running" {
 		t.Fatalf("fresh status = %s", st.status)
+	}
+}
+
+func TestReapedJobFencesFormerOwner(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Enqueue(ctx, "k", 1, "fence"); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	old, err := s.Dequeue(ctx)
+	if err != nil || old == nil {
+		t.Fatalf("dequeue: %v, %v", old, err)
+	}
+	mustExec(t, s, "UPDATE queue_jobs SET locked_at = now() - interval '11 minutes'")
+	if n, err := s.ReapStale(ctx, 10*time.Minute); err != nil || n != 1 {
+		t.Fatalf("reap = %d, %v", n, err)
+	}
+	current, err := s.Dequeue(ctx)
+	if err != nil || current == nil || current.ID != old.ID || current.Attempts != old.Attempts+1 {
+		t.Fatalf("redequeue = %+v, %v", current, err)
+	}
+	stale := []struct {
+		name string
+		call func() error
+	}{
+		{"complete", func() error { return s.Complete(ctx, old.ID, old.Attempts) }},
+		{"fail", func() error { return s.Fail(ctx, old.ID, old.Attempts, errors.New("late")) }},
+		{"defer", func() error { return s.Defer(ctx, old.ID, old.Attempts, time.Now().Add(time.Hour)) }},
+		{"kill", func() error { return s.Kill(ctx, old.ID, old.Attempts, errors.New("late")) }},
+	}
+	for _, c := range stale {
+		if err := c.call(); !errors.Is(err, ErrLeaseLost) {
+			t.Fatalf("%s by former owner = %v, want ErrLeaseLost", c.name, err)
+		}
+		st := readJob(t, s, old.ID)
+		if st.status != "running" || st.attempts != current.Attempts || st.lastError != "" {
+			t.Fatalf("%s by former owner changed state: %+v", c.name, st)
+		}
+	}
+	ok, err := s.Enqueue(ctx, "k", 2, "fence")
+	if err != nil || ok {
+		t.Fatalf("dedupe while running = %v, %v", ok, err)
+	}
+	if err := s.Complete(ctx, current.ID, current.Attempts); err != nil {
+		t.Fatalf("complete by current owner: %v", err)
+	}
+	if st := readJob(t, s, old.ID); st.status != "done" {
+		t.Fatalf("status = %s", st.status)
+	}
+	if err := s.Complete(ctx, current.ID, current.Attempts); !errors.Is(err, ErrLeaseLost) {
+		t.Fatalf("second complete = %v", err)
+	}
+}
+
+func TestReapStaleKillsAfterMaxAttempts(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if _, err := s.Enqueue(ctx, "k", 1, "poison"); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	var id int64
+	for attempt := 1; attempt <= MaxAttempts; attempt++ {
+		job, err := s.Dequeue(ctx)
+		if err != nil || job == nil || job.Attempts != attempt {
+			t.Fatalf("dequeue attempt %d = %+v, %v", attempt, job, err)
+		}
+		id = job.ID
+		mustExec(t, s, "UPDATE queue_jobs SET locked_at = now() - interval '11 minutes'")
+		if n, err := s.ReapStale(ctx, 10*time.Minute); err != nil || n != 1 {
+			t.Fatalf("reap %d = %d, %v", attempt, n, err)
+		}
+		st := readJob(t, s, id)
+		if attempt < MaxAttempts && st.status != "pending" {
+			t.Fatalf("attempt %d status = %s", attempt, st.status)
+		}
+		if attempt == MaxAttempts && (st.status != "dead" || st.lastError != "job lease expired") {
+			t.Fatalf("final state = %+v", st)
+		}
+	}
+	job, err := s.Dequeue(ctx)
+	if err != nil || job != nil {
+		t.Fatalf("dead job dequeued: %+v, %v", job, err)
+	}
+	ok, err := s.Enqueue(ctx, "k", 1, "poison")
+	if err != nil || !ok {
+		t.Fatalf("enqueue after dead = %v, %v", ok, err)
 	}
 }
 

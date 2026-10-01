@@ -8,8 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrNotFound = errors.New("store: row not found")
-
 type Store struct {
 	pool *pgxpool.Pool
 }

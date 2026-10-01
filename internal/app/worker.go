@@ -26,6 +26,7 @@ const (
 	depthInterval     = 15 * time.Second
 	drainTimeout      = 60 * time.Second
 	recordTimeout     = 10 * time.Second
+	handlerTimeout    = 5 * time.Minute
 )
 
 func jitter(max time.Duration) time.Duration {
@@ -107,10 +108,16 @@ func (a *App) processNext(pollCtx, jobCtx context.Context) (bool, error) {
 
 func (a *App) process(ctx context.Context, job *store.QueueJob) {
 	log := a.logger.With("job_id", job.ID, "kind", job.Kind, "attempt", job.Attempts)
-	err := a.invoke(ctx, job)
+	handlerCtx, cancelHandler := context.WithTimeout(ctx, a.handlerTimeout)
+	err := a.invoke(handlerCtx, job)
+	cancelHandler()
 	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
 	defer cancel()
 	result, rerr := a.record(recordCtx, ctx, job, err)
+	if errors.Is(rerr, store.ErrLeaseLost) {
+		log.Warn("lost lease; job result discarded", "result", result)
+		return
+	}
 	if rerr != nil {
 		log.Error("recording job result failed", "error", rerr.Error())
 		return
@@ -145,19 +152,19 @@ func (a *App) record(ctx, jobCtx context.Context, job *store.QueueJob, cause err
 	var perm *permanentError
 	switch {
 	case cause == nil:
-		return metrics.ResultDone, a.store.Complete(ctx, job.ID)
+		return metrics.ResultDone, a.store.Complete(ctx, job.ID, job.Attempts)
 	case errors.As(cause, &rateLimited):
-		return metrics.ResultDeferred, a.store.Defer(ctx, job.ID, rateLimited.Reset.Add(jitter(deferJitter)))
+		return metrics.ResultDeferred, a.store.Defer(ctx, job.ID, job.Attempts, rateLimited.Reset.Add(jitter(deferJitter)))
 	case errors.As(cause, &perm):
-		return metrics.ResultDead, a.store.Kill(ctx, job.ID, cause)
+		return metrics.ResultDead, a.store.Kill(ctx, job.ID, job.Attempts, cause)
 	case jobCtx.Err() != nil && errors.Is(cause, context.Canceled):
-		return metrics.ResultDeferred, a.store.Defer(ctx, job.ID, time.Now())
+		return metrics.ResultDeferred, a.store.Defer(ctx, job.ID, job.Attempts, time.Now())
 	}
 	result := metrics.ResultFailed
 	if job.Attempts >= store.MaxAttempts {
 		result = metrics.ResultDead
 	}
-	return result, a.store.Fail(ctx, job.ID, cause)
+	return result, a.store.Fail(ctx, job.ID, job.Attempts, cause)
 }
 
 func (a *App) maintain(ctx context.Context) {

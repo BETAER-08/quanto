@@ -66,13 +66,15 @@ RETURNING id, kind, payload, attempts`).Scan(&j.ID, &j.Kind, &j.Payload, &j.Atte
 	return &j, nil
 }
 
-func (s *Store) exec(ctx context.Context, op string, sql string, args ...any) error {
+var ErrLeaseLost = errors.New("store: job lease lost")
+
+func (s *Store) fenced(ctx context.Context, op string, sql string, args ...any) error {
 	tag, err := s.pool.Exec(ctx, sql, args...)
 	if err != nil {
 		return fmt.Errorf("store: %s: %w", op, err)
 	}
 	if tag.RowsAffected() == 0 {
-		return fmt.Errorf("store: %s: %w", op, ErrNotFound)
+		return fmt.Errorf("store: %s: %w", op, ErrLeaseLost)
 	}
 	return nil
 }
@@ -84,39 +86,42 @@ func errorText(cause error) string {
 	return truncateRunes(cause.Error(), lastErrorRunes)
 }
 
-func (s *Store) Complete(ctx context.Context, id int64) error {
-	return s.exec(ctx, "complete job", `UPDATE queue_jobs
+func (s *Store) Complete(ctx context.Context, id int64, attempts int) error {
+	return s.fenced(ctx, "complete job", `UPDATE queue_jobs
 SET status = 'done', locked_at = NULL, updated_at = now()
-WHERE id = $1`, id)
+WHERE id = $1 AND status = 'running' AND attempts = $2`, id, attempts)
 }
 
-func (s *Store) Fail(ctx context.Context, id int64, cause error) error {
-	return s.exec(ctx, "fail job", `UPDATE queue_jobs
-SET status = CASE WHEN attempts >= $3 THEN 'dead' ELSE 'pending' END,
-    run_after = CASE WHEN attempts >= $3 THEN run_after
+func (s *Store) Fail(ctx context.Context, id int64, attempts int, cause error) error {
+	return s.fenced(ctx, "fail job", `UPDATE queue_jobs
+SET status = CASE WHEN attempts >= $4 THEN 'dead' ELSE 'pending' END,
+    run_after = CASE WHEN attempts >= $4 THEN run_after
         ELSE now() + LEAST(interval '30 seconds' * power(2, GREATEST(attempts - 1, 0)), interval '30 minutes') END,
     locked_at = NULL,
-    last_error = $2,
+    last_error = $3,
     updated_at = now()
-WHERE id = $1`, id, errorText(cause), MaxAttempts)
+WHERE id = $1 AND status = 'running' AND attempts = $2`, id, attempts, errorText(cause), MaxAttempts)
 }
 
-func (s *Store) Kill(ctx context.Context, id int64, cause error) error {
-	return s.exec(ctx, "kill job", `UPDATE queue_jobs
-SET status = 'dead', locked_at = NULL, last_error = $2, updated_at = now()
-WHERE id = $1`, id, errorText(cause))
+func (s *Store) Kill(ctx context.Context, id int64, attempts int, cause error) error {
+	return s.fenced(ctx, "kill job", `UPDATE queue_jobs
+SET status = 'dead', locked_at = NULL, last_error = $3, updated_at = now()
+WHERE id = $1 AND status = 'running' AND attempts = $2`, id, attempts, errorText(cause))
 }
 
-func (s *Store) Defer(ctx context.Context, id int64, until time.Time) error {
-	return s.exec(ctx, "defer job", `UPDATE queue_jobs
-SET status = 'pending', run_after = $2, attempts = GREATEST(attempts - 1, 0), locked_at = NULL, updated_at = now()
-WHERE id = $1`, id, until)
+func (s *Store) Defer(ctx context.Context, id int64, attempts int, until time.Time) error {
+	return s.fenced(ctx, "defer job", `UPDATE queue_jobs
+SET status = 'pending', run_after = $3, attempts = GREATEST(attempts - 1, 0), locked_at = NULL, updated_at = now()
+WHERE id = $1 AND status = 'running' AND attempts = $2`, id, attempts, until)
 }
 
 func (s *Store) ReapStale(ctx context.Context, olderThan time.Duration) (int64, error) {
 	tag, err := s.pool.Exec(ctx, `UPDATE queue_jobs
-SET status = 'pending', locked_at = NULL, updated_at = now()
-WHERE status = 'running' AND locked_at < now() - make_interval(secs => $1)`, olderThan.Seconds())
+SET status = CASE WHEN attempts >= $2 THEN 'dead' ELSE 'pending' END,
+    last_error = CASE WHEN attempts >= $2 THEN 'job lease expired' ELSE last_error END,
+    locked_at = NULL,
+    updated_at = now()
+WHERE status = 'running' AND locked_at < now() - make_interval(secs => $1)`, olderThan.Seconds(), MaxAttempts)
 	if err != nil {
 		return 0, fmt.Errorf("store: reap stale jobs: %w", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/BETAER-08/quanto/internal/github"
 	"github.com/BETAER-08/quanto/internal/metrics"
@@ -30,6 +31,7 @@ type App struct {
 	allowPrivateRepos bool
 	maxWorkflowFiles  int
 	concurrency       int
+	handlerTimeout    time.Duration
 
 	slugMu sync.Mutex
 	slug   string
@@ -63,6 +65,7 @@ func New(opts Options) (*App, error) {
 		allowPrivateRepos: opts.AllowPrivateRepos,
 		maxWorkflowFiles:  maxFiles,
 		concurrency:       concurrency,
+		handlerTimeout:    handlerTimeout,
 	}, nil
 }
 
