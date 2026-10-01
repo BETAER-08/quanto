@@ -1,0 +1,2 @@
+`.github/workflows/ci.yml` (modified)
+  - [high] `contents` permission (job `publish`): `none` → `write`

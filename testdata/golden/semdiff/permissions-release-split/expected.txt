@@ -1,0 +1,3 @@
+`.github/workflows/ci.yml` (modified)
+  - [low] `contents` permission (job `plan`): `write` → `read`
+  - [low] `contents` permission (workflow): `write` → `none`

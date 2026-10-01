@@ -12,6 +12,7 @@ func FuzzCompare(f *testing.F) {
 		{"jobs:\n  a: {needs: b}\n  b: {needs: a}\n", "jobs:\n  c: {uses: ./.github/workflows/x.yml, secrets: inherit}\n"},
 		{"", "[\n"},
 		{"a: &x [1, 2]\nb: *x\n", "on: push\njobs: {}\n"},
+		{"on: push\npermissions: {}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n", "on: push\npermissions: {}\njobs:\n  a: {runs-on: x, permissions: {contents: write}, steps: [{run: a}]}\n  b: {runs-on: x, permissions: write-all, steps: [{run: b}]}\n"},
 	}
 	for _, s := range seeds {
 		f.Add(s[0], s[1])
@@ -25,6 +26,9 @@ func FuzzCompare(f *testing.F) {
 		}
 		if _, err := json.Marshal(d); err != nil {
 			t.Fatalf("marshal: %v", err)
+		}
+		if berr == nil && aerr == nil && bw != nil && aw != nil {
+			checkPermissionCoverage(t, bw, aw, d)
 		}
 		if berr == nil && bw != nil {
 			self := Compare(Input{Path: "before.yml", Before: bw, After: bw}, Options{})

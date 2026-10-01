@@ -3,40 +3,40 @@
   "old_path": "",
   "status": "modified",
   "before": {
-    "jobs_per_run": "1",
-    "depth": 1,
+    "jobs_per_run": "2",
+    "depth": 2,
     "width": 1,
     "runner_minutes": ""
   },
   "after": {
-    "jobs_per_run": "1",
-    "depth": 1,
+    "jobs_per_run": "2",
+    "depth": 2,
     "width": 1,
     "runner_minutes": ""
   },
   "findings": [
     {
-      "kind": "permissions.removed",
+      "kind": "permissions.broadened",
       "significance": "high",
-      "subject": "workflow",
-      "before": "",
-      "after": "",
-      "detail": "repository-default",
+      "subject": "job `publish`",
+      "before": "none",
+      "after": "write",
+      "detail": "contents",
       "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 14,
+        "column": 17,
+        "end_line": 14,
+        "end_column": 21,
+        "path": "jobs.publish.permissions.contents"
+      },
+      "base_pos": {
         "file": "",
         "line": 0,
         "column": 0,
         "end_line": 0,
         "end_column": 0,
         "path": ""
-      },
-      "base_pos": {
-        "file": ".github/workflows/ci.yml",
-        "line": 4,
-        "column": 3,
-        "end_line": 4,
-        "end_column": 16,
-        "path": "permissions"
       }
     }
   ],

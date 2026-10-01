@@ -716,7 +716,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 | `permissions.broadened` | High | `{detail}` permission ({subject}): `{before}` → `{after}` |
 | `permissions.narrowed` | Low | `{detail}` permission ({subject}): `{before}` → `{after}` |
 | `permissions.write_all` | High | `permissions: write-all` set on {subject} |
-| `permissions.removed` | High | `permissions` removed from {subject}; repository default applies |
+| `permissions.removed` | High | `permissions` removed from {subject}{detail} |
 | `permissions.declared` | Low | `permissions` declared on {subject} |
 | `secrets.added` | Normal | New secret referenced: `{subject}` |
 | `secrets.inherit_added` | High | Job `{subject}` passes all secrets to `{after}` (`secrets: inherit`) |
@@ -734,11 +734,15 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 - 액션 비교 단위는 `Identity()`다. 같은 Identity가 여러 스텝에 있으면 ref 집합으로 비교한다. 집합은 정렬해서 `, `로 연결해 표기한다.
 - `secrets.added`는 전후 `Workflow.SecretRefs`의 차집합이다.
 - 필터 변경 문구의 before/after는 값을 정렬해 `, `로 연결한다. 값이 없으면 `(none)`이다.
-- **권한 비교 규칙.**
-  - 비교 단위는 워크플로 수준 하나와, 전후 모두 존재하는 잡 각각이다.
-  - 전에 선언, 후에 미선언 → `permissions.removed`. 전에 미선언, 후에 선언 → `permissions.declared`. 둘 다 미선언이면 비교하지 않는다.
-  - 둘 다 선언이면 레벨 순서 `none < read < write`로 스코프별 비교한다. `read-all`은 모든 스코프가 read, `write-all`은 모든 스코프가 write인 것으로 펼친다. 비교할 스코프 이름 집합은 GitHub 공식 스코프 목록(`actions`, `attestations`, `checks`, `contents`, `deployments`, `discussions`, `id-token`, `issues`, `models`, `packages`, `pages`, `pull-requests`, `repository-projects`, `security-events`, `statuses`)과 전후에 명시된 스코프의 합집합이다. 명시되지 않은 스코프는 none이다.
-  - 후의 `All`이 `write-all`이고 전이 아니면 `permissions.write_all` 하나만 내고 해당 단위의 스코프별 broadened는 내지 않는다.
+- **권한 비교 규칙 (실효 권한 기준).**
+  - **실효 권한.** 워크플로 실효 권한은 워크플로 `permissions`가 선언돼 있으면 그 값이고, 없으면 "저장소 기본값"(알 수 없음)이다. 잡 실효 권한은 잡에 `permissions`가 선언돼 있으면 그 값이고, 없으면 워크플로 실효 권한이다.
+  - **단위 변화 계산.** 한 단위의 전후 실효 권한 `(B, A)`에서 변화 항목 목록을 만든다. 둘 다 알 수 없음 → 없음. 알려짐 → 알 수 없음 → `permissions.removed`. 알 수 없음 → 알려짐 → `permissions.declared`. 둘 다 알려짐 → 후가 `write-all`이고 전이 아니면 `permissions.write_all` 하나만, 아니면 레벨 순서 `none < read < write`로 스코프별 `permissions.broadened`·`permissions.narrowed`. `read-all`은 모든 스코프가 read, `write-all`은 모든 스코프가 write인 것으로 펼친다. 비교할 스코프 이름 집합은 GitHub 공식 스코프 목록(`actions`, `attestations`, `checks`, `contents`, `deployments`, `discussions`, `id-token`, `issues`, `models`, `packages`, `pages`, `pull-requests`, `repository-projects`, `security-events`, `statuses`)과 전후에 명시된 스코프의 합집합이다. 명시되지 않은 스코프는 none이다.
+  - **워크플로 단위.** 워크플로 실효 권한의 변화 항목을 `workflow` 주체로 한 번만 보고한다.
+  - **잡 단위 (전후 모두 존재하는 잡, 이름 변경 매칭 포함).** 잡 실효 권한의 변화 항목 중 워크플로 단위 변화 항목과 같지 않은 것만 보고한다. 같음의 기준은 (Kind, 스코프, 전 레벨, 후 레벨)이 모두 같은 것이다. 따라서 전후 모두 상속만 하는 잡은 보고하지 않는다.
+  - **추가된 잡.** 추가된 잡의 실효 권한이 알려져 있고 `write-all`이면 `permissions.write_all` 하나를, 아니면 write인 스코프마다 `permissions.broadened`를 낸다. 이때 `Before`는 `none (new job)`이다. 실효 권한을 알 수 없으면 내지 않는다.
+  - **`permissions.removed`의 `{detail}`.** after에서 워크플로와 모든 잡에 `permissions` 선언이 없을 때만 `Detail = "repository-default"`이고 문구 끝에 `; repository default applies`를 붙인다. 그 외에는 `Detail`이 빈 문자열이고 접미 문구가 없다.
+  - **위치.** 스코프 항목은 후 실효 권한의 해당 스코프 값 노드(없으면 실효 권한을 정한 `permissions` 노드), `removed`는 `BasePos`에 전 실효 권한의 `permissions` 노드다.
+  - **속성.** 전후 실효 권한이 모두 알려진 짝 잡(이름 변경 매칭 포함)에서 어떤 스코프의 레벨이 올라가면, 그 잡 또는 `workflow` 주체에 해당 스코프의 `permissions.broadened`나 `permissions.write_all`이 반드시 있다. 실효 권한이 알려진 추가된 잡은 write인 스코프마다 같은 조건을 만족한다. 코퍼스 인접 쌍(양방향), 골든 케이스, 퍼즈에서 검증한다.
 - **위치.** 각 Finding의 `Pos`는 가장 구체적인 대상 노드다. 매트릭스는 `strategy.matrix` 노드, 권한은 해당 스코프 값 노드(없으면 `permissions` 노드), 액션은 해당 스텝의 `uses` 값 노드, 잡 단위는 잡 ID 키 노드, 트리거는 `on` 아래 이벤트 키 노드, 추정·그래프는 워크플로 루트의 `jobs` 키 노드다.
 - 스케줄 문구: `'0 * * * *' (24 runs/day)` 형식으로 표기한다. 모든 날 실행이 아니면 `(N runs on matching days)`, 해석 실패면 cron 문자열만 쓴다.
 - `graph.width_changed`와 `graph.depth_changed`는 값이 다를 때만 만든다.
@@ -799,6 +803,10 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 24. `anchor-shared-change` (`runs-on: &runner ...`로 정의하고 다른 잡에서 `*runner`로 참조. 앵커 정의 한 줄 변경이 두 잡의 `job.runner_changed` 두 건으로 나와야 한다. 머지 키는 쓰지 않는다)
 25. `estimate-with-history` (가짜 DurationSource로 샘플 충분)
 26. `estimate-insufficient` (샘플 4개 → 추정 없음)
+27. `permissions-job-write-added` (워크플로 `permissions: {}`, 잡에 `contents: write` 추가) → 잡 주체 `permissions.broadened` 1건만
+28. `permissions-job-write-removed` (27의 역방향) → 잡 주체 `permissions.narrowed` 1건만
+29. `permissions-new-job-write-all` (워크플로 `permissions: {}`, `write-all` 잡 추가) → `permissions.write_all`(`Before = none (new job)`), `job.added`, `graph.width_changed`
+30. `permissions-release-split` (cargo-dist 형식 ruff `release.yml` 구조. 워크플로 `contents: write`를 `{}`로 바꾸고 필요한 잡에만 선언) → 워크플로 `contents` narrowed와 `plan` 잡 `contents` narrowed만. 상속만 하는 잡과 같은 레벨을 다시 선언한 잡은 보고하지 않는다
 
 **속성 테스트:** 코퍼스의 모든 파일에 대해 `Compare(a, a)`의 Finding이 0개다. 코퍼스의 인접 파일 쌍 `(a, b)`에 대해 다음 대응쌍마다 `Compare(a, b)`의 왼쪽 개수와 `Compare(b, a)`의 오른쪽 개수가 같다: (`trigger.added` + `trigger.pull_request_target_added`, `trigger.removed`), (`job.added`, `job.removed`), (`action.added` + `action.third_party_added`, `action.removed`), (`workflow.added`, `workflow.removed`). `job.renamed` 개수는 양방향이 같다. 퍼즈: 임의 YAML 두 개로 패닉하지 않는다.
 

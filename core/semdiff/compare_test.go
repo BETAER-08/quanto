@@ -231,14 +231,13 @@ func TestPermissionScopes(t *testing.T) {
 	after := "on: push\npermissions: {contents: write, custom-scope: read}\njobs:\n  a:\n    runs-on: x\n    steps: [{run: a}]\n"
 	d := diff(t, before, after)
 	broad := findingsOf(d, kindPermissionsBroadened)
-	if len(broad) != 1 || broad[0].Detail != "contents" || broad[0].Before != "read" || broad[0].After != "write" {
+	if len(broad) != 2 || broad[0].Subject != "job `a`" || broad[0].Detail != "custom-scope" || broad[0].Before != "none" || broad[0].After != "read" || broad[1].Subject != "workflow" || broad[1].Detail != "contents" || broad[1].Before != "read" || broad[1].After != "write" {
 		t.Errorf("broadened = %+v", broad)
 	}
 	if n := len(findingsOf(d, kindPermissionsNarrowed)); n != 14 {
 		t.Errorf("narrowed = %d", n)
 	}
-	removed := findingsOf(d, kindPermissionsRemoved)
-	if len(removed) != 1 || removed[0].Subject != "job `a`" {
+	if removed := findingsOf(d, kindPermissionsRemoved); len(removed) != 0 {
 		t.Errorf("removed = %+v", removed)
 	}
 	custom := diff(t, "on: push\npermissions: {contents: read}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n", "on: push\npermissions: {contents: read, custom-scope: write}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n")

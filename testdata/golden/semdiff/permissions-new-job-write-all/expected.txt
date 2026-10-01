@@ -1,0 +1,6 @@
+`.github/workflows/ci.yml` (modified)
+  Jobs per run: 2 → 3
+  Max concurrent jobs: 1 → 2
+  - [high] `permissions: write-all` set on job `tag`
+  - [normal] Job added: `tag`
+  - [normal] Max concurrent jobs: 1 → 2

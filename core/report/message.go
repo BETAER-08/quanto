@@ -119,7 +119,10 @@ func Message(f semdiff.Finding) string {
 	case "permissions.write_all":
 		return "`permissions: write-all` set on " + scope(s)
 	case "permissions.removed":
-		return "`permissions` removed from " + scope(s) + "; repository default applies"
+		if d != "" {
+			return "`permissions` removed from " + scope(s) + "; repository default applies"
+		}
+		return "`permissions` removed from " + scope(s)
 	case "permissions.declared":
 		return "`permissions` declared on " + scope(s)
 	case "secrets.added":

@@ -87,8 +87,11 @@ func TestCorpusSymmetry(t *testing.T) {
 	}
 	for i := 0; i+1 < len(wfs); i++ {
 		a, b := wfs[i], wfs[i+1]
-		ab := countKinds(Compare(Input{Path: "pair.yml", Before: a, After: b}, Options{}))
-		ba := countKinds(Compare(Input{Path: "pair.yml", Before: b, After: a}, Options{}))
+		dab := Compare(Input{Path: "pair.yml", Before: a, After: b}, Options{})
+		dba := Compare(Input{Path: "pair.yml", Before: b, After: a}, Options{})
+		checkPermissionCoverage(t, a, b, dab)
+		checkPermissionCoverage(t, b, a, dba)
+		ab, ba := countKinds(dab), countKinds(dba)
 		for _, p := range symmetricPairs {
 			if l, r := sumKinds(ab, p.left), sumKinds(ba, p.right); l != r {
 				t.Errorf("%s -> %s: %v = %d, reverse %v = %d", names[i], names[i+1], p.left, l, p.right, r)

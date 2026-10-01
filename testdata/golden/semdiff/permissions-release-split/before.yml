@@ -1,0 +1,55 @@
+name: Release
+permissions:
+  "contents": "write"
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag
+        required: true
+        type: string
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      val: ${{ steps.plan.outputs.manifest }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: plan
+        run: dist plan --output-format=json > plan.json
+  custom-build-binaries:
+    needs:
+      - plan
+    uses: ./.github/workflows/build-binaries.yml
+    with:
+      plan: ${{ needs.plan.outputs.val }}
+    secrets: inherit
+  host:
+    needs:
+      - plan
+      - custom-build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: dist host --steps=upload --steps=release
+  custom-publish-pypi:
+    needs:
+      - plan
+      - host
+    uses: ./.github/workflows/publish-pypi.yml
+    with:
+      plan: ${{ needs.plan.outputs.val }}
+    secrets: inherit
+    permissions:
+      "id-token": "write"
+      "packages": "write"
+  announce:
+    needs:
+      - plan
+      - host
+      - custom-publish-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: dist host --steps=announce

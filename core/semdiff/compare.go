@@ -83,7 +83,7 @@ func errorText(before, after error) string {
 
 func (c *comparer) compareWorkflows() {
 	c.triggerChanges()
-	c.permissionChanges("workflow", c.before.wf.Permissions, c.after.wf.Permissions)
+	c.workflowPermissionChanges()
 	c.jobChanges()
 	c.actionChanges()
 	c.secretChanges()

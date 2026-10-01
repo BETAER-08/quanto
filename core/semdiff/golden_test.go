@@ -47,32 +47,36 @@ var goldenDurations = map[string]DurationSource{
 }
 
 var goldenKinds = map[string][]string{
-	"identical":                  {},
-	"reformatted":                {},
-	"matrix-axis-added":          {kindMatrixCountChanged, kindGraphWidthChanged},
-	"matrix-include-docs":        {kindMatrixCountChanged, kindGraphWidthChanged},
-	"matrix-exclude":             {kindMatrixCountChanged, kindGraphWidthChanged},
-	"matrix-dynamic":             {kindMatrixDynamic},
-	"matrix-over-limit":          {kindMatrixOverLimit, kindGraphWidthChanged},
-	"permissions-broadened":      {kindPermissionsBroadened},
-	"permissions-removed":        {kindPermissionsRemoved},
-	"permissions-write-all":      {kindPermissionsWriteAll},
-	"third-party-action-mutable": {kindActionThirdPartyAdded},
-	"action-pin-removed":         {kindActionPinRemoved},
-	"action-major-bump":          {kindActionRefChanged},
-	"schedule-added":             {kindTriggerScheduleChanged},
-	"pull-request-target-added":  {kindTriggerPRTargetAdded},
-	"job-renamed":                {kindJobRenamed},
-	"job-added-depth":            {kindJobAdded, kindGraphDepthChanged},
-	"needs-cycle":                {kindGraphCycle},
-	"secrets-new-and-inherit":    {kindSecretsInheritAdded, kindSecretsAdded},
-	"runner-macos-added":         {kindJobRunnerChanged},
-	"workflow-added":             {kindWorkflowAdded},
-	"workflow-removed":           {kindWorkflowRemoved},
-	"head-unparseable":           {kindWorkflowUnanalyzable},
-	"anchor-shared-change":       {kindJobRunnerChanged, kindJobRunnerChanged},
-	"estimate-with-history":      {kindMatrixCountChanged, kindEstimateChanged, kindGraphWidthChanged},
-	"estimate-insufficient":      {kindMatrixCountChanged, kindGraphWidthChanged},
+	"identical":                     {},
+	"reformatted":                   {},
+	"matrix-axis-added":             {kindMatrixCountChanged, kindGraphWidthChanged},
+	"matrix-include-docs":           {kindMatrixCountChanged, kindGraphWidthChanged},
+	"matrix-exclude":                {kindMatrixCountChanged, kindGraphWidthChanged},
+	"matrix-dynamic":                {kindMatrixDynamic},
+	"matrix-over-limit":             {kindMatrixOverLimit, kindGraphWidthChanged},
+	"permissions-broadened":         {kindPermissionsBroadened},
+	"permissions-removed":           {kindPermissionsRemoved},
+	"permissions-write-all":         {kindPermissionsWriteAll},
+	"third-party-action-mutable":    {kindActionThirdPartyAdded},
+	"action-pin-removed":            {kindActionPinRemoved},
+	"action-major-bump":             {kindActionRefChanged},
+	"schedule-added":                {kindTriggerScheduleChanged},
+	"pull-request-target-added":     {kindTriggerPRTargetAdded},
+	"job-renamed":                   {kindJobRenamed},
+	"job-added-depth":               {kindJobAdded, kindGraphDepthChanged},
+	"needs-cycle":                   {kindGraphCycle},
+	"secrets-new-and-inherit":       {kindSecretsInheritAdded, kindSecretsAdded},
+	"runner-macos-added":            {kindJobRunnerChanged},
+	"workflow-added":                {kindWorkflowAdded},
+	"workflow-removed":              {kindWorkflowRemoved},
+	"head-unparseable":              {kindWorkflowUnanalyzable},
+	"anchor-shared-change":          {kindJobRunnerChanged, kindJobRunnerChanged},
+	"estimate-with-history":         {kindMatrixCountChanged, kindEstimateChanged, kindGraphWidthChanged},
+	"estimate-insufficient":         {kindMatrixCountChanged, kindGraphWidthChanged},
+	"permissions-job-write-added":   {kindPermissionsBroadened},
+	"permissions-job-write-removed": {kindPermissionsNarrowed},
+	"permissions-new-job-write-all": {kindPermissionsWriteAll, kindJobAdded, kindGraphWidthChanged},
+	"permissions-release-split":     {kindPermissionsNarrowed, kindPermissionsNarrowed},
 }
 
 func loadGoldenSide(t *testing.T, dir, name string) (*Input, bool) {
@@ -149,6 +153,10 @@ func TestGolden(t *testing.T) {
 			again := marshalDiff(t, Compare(goldenInput(t, dir), opts))
 			if !bytes.Equal(got, again) {
 				t.Fatalf("non-deterministic output")
+			}
+			in := goldenInput(t, dir)
+			if in.Before != nil && in.After != nil {
+				checkPermissionCoverage(t, in.Before, in.After, d)
 			}
 			if want, ok := goldenKinds[name]; ok {
 				kinds := kindList(d)

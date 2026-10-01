@@ -195,6 +195,7 @@ func (c *comparer) jobChanges() {
 		info := c.after.jobs[id]
 		c.emit(Finding{Kind: kindJobAdded, Subject: id, Pos: info.job.Pos})
 		c.matrixChange(nil, info)
+		c.addedJobPermissions(info.job)
 		c.inheritChange(nil, info.job)
 	}
 	for _, id := range removed {
@@ -229,7 +230,7 @@ func (c *comparer) pairChanges(p jobPair) {
 		c.emit(Finding{Kind: kindJobConcurrencyChanged, Subject: aj.ID, Before: bc, After: ac, Pos: pos})
 	}
 	c.matrixChange(p.before, p.after)
-	c.permissionChanges("job `"+aj.ID+"`", bj.Permissions, aj.Permissions)
+	c.jobPermissionChanges(bj, aj)
 	c.inheritChange(bj, aj)
 }
 
