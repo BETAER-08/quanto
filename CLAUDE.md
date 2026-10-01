@@ -314,6 +314,7 @@ type Workflow struct {
     EnvKeys     []string
     SecretRefs  []string
     Jobs        []*Job
+    JobsPos     source.Position
     Pos         source.Position
 }
 
@@ -437,7 +438,7 @@ type ReusableRef struct {
 }
 ```
 
-`Jobs`는 YAML에 나타난 순서를 유지한다. `Filters`의 키는 다음 집합으로 제한한다: `branches`, `branches-ignore`, `tags`, `tags-ignore`, `paths`, `paths-ignore`, `types`, `workflows`.
+`Jobs`는 YAML에 나타난 순서를 유지한다. `JobsPos`는 루트의 `jobs` 키 노드 위치이고, 키가 없으면 영값이다. `Filters`의 키는 다음 집합으로 제한한다: `branches`, `branches-ignore`, `tags`, `tags-ignore`, `paths`, `paths-ignore`, `types`, `workflows`.
 
 ### 6.2 정규화 규칙
 
@@ -741,6 +742,15 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 - 스케줄 문구: `'0 * * * *' (24 runs/day)` 형식으로 표기한다. 모든 날 실행이 아니면 `(N runs on matching days)`, 해석 실패면 cron 문자열만 쓴다.
 - `graph.width_changed`와 `graph.depth_changed`는 값이 다를 때만 만든다.
 - 포맷 변경만 있는 경우(플로우 ↔ 블록, 따옴표, 주석, 키 순서, 앵커 도입)에는 Finding이 **0개**여야 한다.
+- **단일 보고 원칙.** 하나의 변경은 하나의 Finding으로 보고한다. 같은 변경을 여러 Kind로 중복 보고하지 않는다.
+- **워크플로 추가·삭제.** `workflow.added` 또는 `workflow.removed` 하나만 낸다. 존재하는 쪽의 Metrics만 채운다.
+- **트리거.** `pull_request_target`이 추가되면 `trigger.pull_request_target_added`만 내고 `trigger.added`는 내지 않는다. `schedule`은 `trigger.added`·`trigger.removed` 대상에서 제외하고, 추가·삭제·변경 모두 `trigger.schedule_changed` 하나로 낸다. 없는 쪽은 `(none)`이다. cron 목록은 정렬해서 비교·표기한다.
+- **매트릭스.** 잡의 인스턴스 수가 256 이하(또는 잡 없음, 동적)에서 256 초과로 새로 넘으면 `matrix.over_limit`만 내고 `matrix.count_changed`는 내지 않는다. 이미 256을 넘던 매트릭스의 수가 바뀌면 `matrix.count_changed`만 낸다. `matrix.dynamic`은 after가 동적이고 before가 동적이 아니거나 잡이 없을 때 낸다. 동적 → 정적 전환은 `matrix.count_changed`(`?` → N, Normal)다. 추가된 잡도 `matrix.dynamic`, `matrix.over_limit` 대상이다.
+- **그래프.** 어느 쪽이든 동적 매트릭스가 있으면 `graph.width_changed`를 내지 않는다. 어느 쪽이든 순환이 있으면 `graph.depth_changed`와 `graph.width_changed`를 내지 않는다.
+- **액션·재사용 워크플로.** 재사용 워크플로를 호출하는 잡의 `uses`도 스텝 액션과 같은 규칙으로 비교한다. Identity는 `lower(owner/repo/path)`, local이면 경로다. 서드파티 판정은 `!Local && !Docker && !FirstParty`이고 docker·local은 `action.added`로 낸다. ref 집합이 바뀐 경우, 전의 ref가 전부 SHA이고 후에 SHA가 아닌 ref가 있으면 `action.pin_removed` 하나만, 그 외는 `action.ref_changed` 하나만 낸다.
+- **runs-on 표기.** 라벨을 정렬해 `, `로 연결한다. group이 있으면 앞에 `group <g>: `를 붙인다. 없으면 `(none)`이다. 라벨 순서만 바뀐 경우는 변경이 아니다.
+- **추정.** `RunnerMinutes`는 각 쪽에서 독립적으로 추정이 가능하면 채운다. `Estimate`와 `estimate.changed`는 양쪽 모두 가능할 때만 만든다. `Estimate.Samples`는 전후 잡별 샘플 수의 최솟값이다.
+- **`secrets.added` 위치.** 모델에 참조 위치가 없으므로 `Pos`는 영값이다.
 
 ### 9.5 잡 이름 변경 탐지
 
@@ -767,19 +777,19 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 3. `matrix-axis-added` (6 → 24)
 4. `matrix-include-docs` (7.3의 문서 예제를 잡 매트릭스로)
 5. `matrix-exclude` (12 → 9)
-6. `matrix-dynamic`
-7. `matrix-over-limit`
+6. `matrix-dynamic` → `matrix.dynamic` 1건만
+7. `matrix-over-limit` → `matrix.over_limit`, `graph.width_changed`
 8. `permissions-broadened` (contents read → write)
 9. `permissions-removed`
 10. `permissions-write-all`
 11. `third-party-action-mutable`
-12. `action-pin-removed` (SHA → 태그)
+12. `action-pin-removed` (SHA → 태그) → `action.pin_removed` 1건만
 13. `action-major-bump` (v4 → v5)
-14. `schedule-added` (`0 * * * *`)
-15. `pull-request-target-added`
+14. `schedule-added` (`0 * * * *`) → `trigger.schedule_changed` 1건만
+15. `pull-request-target-added` → `trigger.pull_request_target_added` 1건만
 16. `job-renamed` (스텝 동일) → renamed 1건만
 17. `job-added-depth` (needs 추가로 깊이 변화)
-18. `needs-cycle`
+18. `needs-cycle` → `graph.cycle` 1건만
 19. `secrets-new-and-inherit`
 20. `runner-macos-added`
 21. `workflow-added`
@@ -789,7 +799,7 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 25. `estimate-with-history` (가짜 DurationSource로 샘플 충분)
 26. `estimate-insufficient` (샘플 4개 → 추정 없음)
 
-**속성 테스트:** 코퍼스의 모든 파일에 대해 `Compare(a, a)`의 Finding이 0개다. 코퍼스의 인접 파일 쌍 `(a, b)`에 대해 다음 대응쌍마다 `Compare(a, b)`의 왼쪽 개수와 `Compare(b, a)`의 오른쪽 개수가 같다: (`trigger.added`, `trigger.removed`), (`job.added`, `job.removed`), (`action.added` + `action.third_party_added`, `action.removed`), (`workflow.added`, `workflow.removed`). `job.renamed` 개수는 양방향이 같다. 퍼즈: 임의 YAML 두 개로 패닉하지 않는다.
+**속성 테스트:** 코퍼스의 모든 파일에 대해 `Compare(a, a)`의 Finding이 0개다. 코퍼스의 인접 파일 쌍 `(a, b)`에 대해 다음 대응쌍마다 `Compare(a, b)`의 왼쪽 개수와 `Compare(b, a)`의 오른쪽 개수가 같다: (`trigger.added` + `trigger.pull_request_target_added`, `trigger.removed`), (`job.added`, `job.removed`), (`action.added` + `action.third_party_added`, `action.removed`), (`workflow.added`, `workflow.removed`). `job.renamed` 개수는 양방향이 같다. 퍼즈: 임의 YAML 두 개로 패닉하지 않는다.
 
 ---
 
