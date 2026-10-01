@@ -33,3 +33,5 @@ jobs:
         run: go test -run '^$' -fuzz FuzzParseTemplate -fuzztime 20s -fuzzminimizetime 5s ./core/expr/
       - name: fuzz FuzzExpand
         run: go test -run '^$' -fuzz FuzzExpand -fuzztime 20s -fuzzminimizetime 5s ./core/matrix/
+      - name: fuzz FuzzCompare
+        run: go test -run '^$' -fuzz FuzzCompare -fuzztime 20s -fuzzminimizetime 5s ./core/semdiff/

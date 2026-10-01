@@ -21,6 +21,7 @@ fuzz:
 	go test -run '^$$' -fuzz FuzzLoad -fuzztime $(FUZZTIME) ./core/source/
 	go test -run '^$$' -fuzz FuzzParseTemplate -fuzztime $(FUZZTIME) ./core/expr/
 	go test -run '^$$' -fuzz FuzzExpand -fuzztime $(FUZZTIME) ./core/matrix/
+	go test -run '^$$' -fuzz FuzzCompare -fuzztime $(FUZZTIME) ./core/semdiff/
 
 corpus:
 	./scripts/fetch-corpus.sh
