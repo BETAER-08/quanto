@@ -1,6 +1,8 @@
 package matrix
 
 import (
+	"math"
+	"strconv"
 	"testing"
 
 	"github.com/BETAER-08/quanto/core/source"
@@ -326,8 +328,40 @@ func TestTooLarge(t *testing.T) {
 	if !hasCode(exp, "MATRIX-TOO-LARGE") || !hasCode(exp, "MATRIX-OVER-LIMIT") {
 		t.Errorf("codes = %v", codes(exp))
 	}
-	if exp.Count != 1000000 {
-		t.Errorf("Count = %d, want first product above limit 1000000", exp.Count)
+	if exp.Count != math.MaxInt {
+		t.Errorf("Count = %d, want saturated %d", exp.Count, math.MaxInt)
+	}
+}
+
+func TestTooLargeDistinctCounts(t *testing.T) {
+	axis := "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"
+	build := func(n int) string {
+		content := ""
+		for i := 0; i < n; i++ {
+			content += "a" + strconv.Itoa(i) + ": " + axis + "\n"
+		}
+		return content
+	}
+	cases := []struct {
+		axes int
+		want int
+	}{
+		{6, 1000000},
+		{10, 10000000000},
+		{11, 100000000000},
+	}
+	for _, tc := range cases {
+		exp := expand(t, build(tc.axes))
+		if exp.Materialized || exp.Count != tc.want {
+			t.Errorf("%d axes: Count = %d, Materialized = %v, want %d", tc.axes, exp.Count, exp.Materialized, tc.want)
+		}
+		if !hasCode(exp, "MATRIX-TOO-LARGE") || !hasCode(exp, "MATRIX-OVER-LIMIT") {
+			t.Errorf("%d axes: codes = %v", tc.axes, codes(exp))
+		}
+	}
+	exp := expand(t, "a: [1, 2, 3]\nb: [1, 2]\n"+build(6))
+	if exp.Count != 6000000 {
+		t.Errorf("mixed lengths: Count = %d, want 6000000", exp.Count)
 	}
 }
 

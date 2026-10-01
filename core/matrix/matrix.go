@@ -2,6 +2,7 @@ package matrix
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/BETAER-08/quanto/core/expr"
@@ -136,17 +137,18 @@ func Expand(matrix *source.Node) (*Expansion, error) {
 	}
 	if product > 0 {
 		for _, a := range axes {
-			product *= len(a.values)
-			if product > MaterializeLimit {
+			if product > math.MaxInt/len(a.values) {
+				product = math.MaxInt
 				break
 			}
+			product *= len(a.values)
 		}
 	}
 	if product > MaterializeLimit {
 		exp.Count = product
 		exp.Diagnostics = append(exp.Diagnostics, Diagnostic{
 			Code:    codeTooLarge,
-			Message: fmt.Sprintf("matrix has at least %d base combinations; not materialized", product),
+			Message: fmt.Sprintf("matrix has %d base combinations; not materialized", product),
 			Pos:     matrix.Pos(),
 		})
 		exp.Diagnostics = append(exp.Diagnostics, overLimit(product, matrix.Pos()))
