@@ -15,6 +15,7 @@ type useSite struct {
 
 type usage struct {
 	refs       map[string]model.RefKind
+	hints      map[string]string
 	sites      []useSite
 	thirdParty bool
 }
@@ -44,18 +45,21 @@ func firstPartyOwner(owner string) bool {
 func collectUses(w *model.Workflow) (map[string]*usage, []string) {
 	m := make(map[string]*usage)
 	var order []string
-	add := func(id, ref string, kind model.RefKind, thirdParty bool, pos source.Position) {
+	add := func(id, ref, hint string, kind model.RefKind, thirdParty bool, pos source.Position) {
 		if id == "" {
 			return
 		}
 		u, ok := m[id]
 		if !ok {
-			u = &usage{refs: make(map[string]model.RefKind), thirdParty: thirdParty}
+			u = &usage{refs: make(map[string]model.RefKind), hints: make(map[string]string), thirdParty: thirdParty}
 			m[id] = u
 			order = append(order, id)
 		}
 		if ref != "" {
 			u.refs[ref] = kind
+			if hint != "" && u.hints[ref] == "" {
+				u.hints[ref] = hint
+			}
 		}
 		u.sites = append(u.sites, useSite{ref: ref, pos: pos})
 	}
@@ -64,14 +68,14 @@ func collectUses(w *model.Workflow) (map[string]*usage, []string) {
 			continue
 		}
 		if r := j.Uses; r != nil {
-			add(reusableIdentity(r), r.Ref, r.Kind, !r.Local && !firstPartyOwner(r.Owner), r.Pos)
+			add(reusableIdentity(r), r.Ref, "", r.Kind, !r.Local && !firstPartyOwner(r.Owner), r.Pos)
 		}
 		for _, s := range j.Steps {
 			if s == nil || s.Uses == nil {
 				continue
 			}
 			a := s.Uses
-			add(a.Identity(), a.Ref, a.Kind, !a.Local && !a.Docker && !a.FirstParty, a.Pos)
+			add(a.Identity(), a.Ref, a.VersionHint, a.Kind, !a.Local && !a.Docker && !a.FirstParty, a.Pos)
 		}
 	}
 	return m, order
@@ -84,6 +88,26 @@ func (u *usage) refList() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func (u *usage) displayRefs() string {
+	out := make([]string, 0, len(u.refs))
+	for r, k := range u.refs {
+		if k != model.RefSHA {
+			out = append(out, r)
+			continue
+		}
+		short := r
+		if len(short) > 7 {
+			short = short[:7]
+		}
+		if h := u.hints[r]; h != "" {
+			short = h + " (" + short + ")"
+		}
+		out = append(out, short)
+	}
+	sort.Strings(out)
+	return strings.Join(out, ", ")
 }
 
 func (u *usage) anyKind(kind model.RefKind) bool {
@@ -142,12 +166,14 @@ func (c *comparer) actionChanges() {
 		f := Finding{
 			Kind:    kindActionRefChanged,
 			Subject: id,
-			Before:  strings.Join(bu.refList(), ", "),
-			After:   strings.Join(au.refList(), ", "),
+			Before:  bu.displayRefs(),
+			After:   au.displayRefs(),
 			Pos:     changedSite(bu, au),
 		}
 		if bu.allSHA() && au.anyKind(model.RefMutable) {
 			f.Kind = kindActionPinRemoved
+			f.Before = strings.Join(bu.refList(), ", ")
+			f.After = strings.Join(au.refList(), ", ")
 		}
 		c.emit(f)
 	}

@@ -1,0 +1,69 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": "1",
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": "1",
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "action.ref_changed",
+      "significance": "normal",
+      "subject": "actions/checkout",
+      "before": "v4.1.1 (b4ffde6)",
+      "after": "v4.2.2 (11bd719)",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 7,
+        "column": 15,
+        "end_line": 7,
+        "end_column": 71,
+        "path": "jobs.build.steps[0].uses"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    },
+    {
+      "kind": "action.ref_changed",
+      "significance": "normal",
+      "subject": "org/tool",
+      "before": "1234567",
+      "after": "89abcde",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 9,
+        "column": 15,
+        "end_line": 9,
+        "end_column": 63,
+        "path": "jobs.build.steps[2].uses"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

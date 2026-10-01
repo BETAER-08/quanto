@@ -55,6 +55,13 @@ func (n *Node) Pos() Position {
 	return n.doc.sp.position(n.doc.File, n.path, n.raw)
 }
 
+func (n *Node) LineComment() string {
+	if n == nil || n.raw == nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(n.raw.LineComment), "#"))
+}
+
 func (n *Node) Path() string {
 	if n == nil {
 		return ""

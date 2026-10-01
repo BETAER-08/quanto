@@ -9,6 +9,19 @@ import (
 
 var shaRef = regexp.MustCompile(`^[0-9a-fA-F]{40}$`)
 
+var versionPrefix = regexp.MustCompile(`^v?[0-9]+(\.[0-9]+)*`)
+
+func versionHint(comment string) string {
+	m := versionPrefix.FindString(comment)
+	if m == "" {
+		return ""
+	}
+	if rest := comment[len(m):]; rest != "" && rest[0] != ' ' && rest[0] != '\t' {
+		return ""
+	}
+	return m
+}
+
 func refKind(ref string) RefKind {
 	if shaRef.MatchString(ref) {
 		return RefSHA

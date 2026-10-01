@@ -163,6 +163,7 @@ func (n *Node) Bool() (bool, bool)
 func (n *Node) StrList() []Positioned[string]
 func (n *Node) Walk(fn func(*Node) bool)
 func (n *Node) Lookup(path string) *Node
+func (n *Node) LineComment() string
 
 type Field struct {
     Name  string
@@ -204,6 +205,7 @@ func (e *SyntaxError) Pos() Position
 12. `StrList`는 스칼라 하나, 시퀀스, 매핑(키 목록) 세 형태를 받는다.
 13. `Bool`은 `true/false/yes/no/on/off/y/n`을 대소문자 무시로 인식한다.
 14. 구문 오류는 `*SyntaxError`로 반환한다. yaml.v3 메시지 `yaml: line N: msg`에서 줄 번호를 추출한다.
+15. `LineComment`는 노드 토큰(별칭이면 별칭 토큰)에 yaml.v3가 붙인 `LineComment`에서 앞의 `#`들과 앞뒤 공백을 제거한 값이다. `key: value # c`에서 주석은 값 노드에 붙는다. nil 수신자와 주석 없음은 빈 문자열이다.
 
 ### 4.3 필수 테스트
 
@@ -214,6 +216,7 @@ func (e *SyntaxError) Pos() Position
 - 논리 경로 생성, 점을 포함한 키의 대괄호 경로, `Lookup` 왕복
 - `on` 키가 문자열로 유지됨
 - nil 안전 체인
+- `LineComment`: 값 노드의 줄 주석, `#v2`처럼 공백 없는 주석, 주석 없음, nil 수신자
 - `StrList` 세 형태와 각 항목의 span
 - null 값(`push:`), `Has`로 null 키 존재 확인
 - CRLF 입력의 값과 span
@@ -423,6 +426,7 @@ type ActionRef struct {
     Docker     bool
     DockerImage string
     FirstParty bool
+    VersionHint string
     Pos        source.Position
 }
 func (a *ActionRef) Identity() string
@@ -459,6 +463,7 @@ type ReusableRef struct {
   - `Ref`가 대소문자 무관 `^[0-9a-f]{40}$`면 `RefSHA`, 아니면 `RefMutable`. 태그와 브랜치는 정적으로 구분할 수 없으므로 구분하지 않는다
   - `Owner`가 대소문자 무관으로 `actions` 또는 `github`면 `FirstParty`
   - `Identity()`는 `lower(owner/repo)`에 path가 있으면 `/lower(path)`를 붙인 값이다. Local이면 경로, Docker면 `docker://이미지`다
+  - `VersionHint`: `uses` 값 노드의 `LineComment()`가 정규식 `^v?[0-9]+(\.[0-9]+)*`로 시작하고 그 뒤가 문자열 끝이거나 공백이면 그 일치 부분이다(예: `# v4.1.1` → `v4.1.1`, `# v4 pinned` → `v4`). 그 외는 빈 문자열이다. 주석은 ref 비교에 쓰지 않는다
 - **조건.** `if`는 `expr.ParseCondition`으로 파싱한다. 실패하면 `ParseErr`에 기록하고 `MODEL-EXPR-SYNTAX` 진단을 추가한다. 이 실패로 전체 파싱이 실패하지는 않는다.
 - **SecretRefs.** 문서의 모든 스칼라 **값**(키 제외)을 `Walk`로 순회해서, `expr.IsDynamic`이면 `ParseTemplate`로 파싱하고 `Context == "secrets"`인 참조의 첫 경로 세그먼트를 모은다. `*` 세그먼트와 `github_token`은 제외한다. 대문자로 정규화하고 정렬·중복 제거한다. 파싱 실패한 스칼라는 조용히 건너뛴다.
 
@@ -732,6 +737,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 
 - `{subject}`의 스코프 표기는 워크플로 수준이면 `workflow`, 잡 수준이면 `job `+"`id`"다.
 - `action.third_party_added`의 `{detail}`은 Mutable이면 ` (mutable ref)`, SHA면 빈 문자열이다. 같은 액션에 대해 `action.added`와 중복 보고하지 않는다(서드파티면 third_party_added만).
+- **SHA 표기.** `action.ref_changed`의 `{before}`, `{after}`에서 `Kind`가 `RefSHA`인 ref는 `VersionHint`가 있으면 `<hint> (<sha 앞 7자>)`, 없으면 SHA 앞 7자로 표기한다. 같은 ref에 힌트가 여러 개면 문서 순서상 첫 번째 비어 있지 않은 힌트를 쓴다. 재사용 워크플로 ref는 힌트가 없으므로 SHA 7자다. ref 집합 비교는 원래 ref 문자열로 하므로 주석만 바뀐 경우는 변경이 아니다. 표기 문자열을 정렬해 `, `로 잇는다.
 - 액션 비교 단위는 `Identity()`다. 같은 Identity가 여러 스텝에 있으면 ref 집합으로 비교한다. 집합은 정렬해서 `, `로 연결해 표기한다.
 - `secrets.added`는 전후 `Workflow.SecretRefs`의 차집합이다.
 - 필터 변경은 전체 목록이 아니라 차집합만 보고한다. `Before`는 제거된 원소(전에만 있는 값), `After`는 추가된 원소(후에만 있는 값)를 각각 정렬·중복 제거해 `, `로 연결한 것이다. 문구는 `−` 뒤에 제거 목록, `+` 뒤에 추가 목록을 쓰고, 한쪽이 비면 그 부분(기호 포함)을 생략한다. report는 각 목록을 `, `로 나눠 원소마다 `inline`으로 출력한다. 필터 키 자체가 추가·삭제된 경우도 같은 규칙이다.
@@ -809,6 +815,7 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 29. `permissions-new-job-write-all` (워크플로 `permissions: {}`, `write-all` 잡 추가) → `permissions.write_all`(`Before = none (new job)`), `job.added`, `graph.width_changed`
 30. `permissions-release-split` (cargo-dist 형식 ruff `release.yml` 구조. 워크플로 `contents: write`를 `{}`로 바꾸고 필요한 잡에만 선언) → 워크플로 `contents` narrowed와 `plan` 잡 `contents` narrowed만. 상속만 하는 잡과 같은 레벨을 다시 선언한 잡은 보고하지 않는다
 31. `trigger-filter-changed` (검증 보고서 R3: `push`의 `branches`에 하나 추가·`paths`에서 하나 제거, `pull_request`의 `branches`에 하나 추가·`paths-ignore` 신설) → `trigger.filter_changed` 4건, 각 문구는 추가·제거 원소만 담는다
+32. `action-sha-version-hint` (SHA 고정 액션의 SHA와 `# v4.1.1` 주석 변경, 주석만 바뀐 액션, 주석 없는 SHA 변경) → `action.ref_changed` 2건. 표기는 `v4.1.1 (b4ffde6)` → `v4.2.2 (11bd719)`, `1234567` → `89abcde`이고 주석만 바뀐 액션은 보고하지 않는다
 
 **속성 테스트:** 코퍼스의 모든 파일에 대해 `Compare(a, a)`의 Finding이 0개다. 코퍼스의 인접 파일 쌍 `(a, b)`에 대해 다음 대응쌍마다 `Compare(a, b)`의 왼쪽 개수와 `Compare(b, a)`의 오른쪽 개수가 같다: (`trigger.added` + `trigger.pull_request_target_added`, `trigger.removed`), (`job.added`, `job.removed`), (`action.added` + `action.third_party_added`, `action.removed`), (`workflow.added`, `workflow.removed`). `job.renamed` 개수는 양방향이 같다. 퍼즈: 임의 YAML 두 개로 패닉하지 않는다.
 

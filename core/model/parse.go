@@ -332,6 +332,7 @@ func (p *parser) step(jobID string, index int, n *source.Node) *Step {
 		if !hasRef {
 			p.diag(codeActionNoRef, usesNode.Pos(), "action %q has no @ref", raw)
 		}
+		ref.VersionHint = versionHint(usesNode.LineComment())
 		s.Uses = ref
 	}
 	if run, ok := n.Field("run").PosStr(); ok {

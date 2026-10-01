@@ -602,3 +602,21 @@ func TestMergeFanOutIsBounded(t *testing.T) {
 		t.Fatalf("m60.k = %q", s)
 	}
 }
+
+func TestLineComment(t *testing.T) {
+	doc, err := Load("wf.yml", []byte("steps:\n  - uses: a/b@abc # v4.1.1\n  - uses: c/d@e   #v2\n  - uses: x/y@z\n  - uses: q/r@s  ##  pinned  \n"))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	steps := doc.Root().Field("steps")
+	want := []string{"v4.1.1", "v2", "", "pinned"}
+	for i, w := range want {
+		if got := steps.Index(i).Field("uses").LineComment(); got != w {
+			t.Errorf("step %d LineComment = %q, want %q", i, got, w)
+		}
+	}
+	var nilNode *Node
+	if nilNode.LineComment() != "" || doc.Root().Field("missing").LineComment() != "" {
+		t.Error("nil LineComment not empty")
+	}
+}

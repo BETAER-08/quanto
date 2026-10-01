@@ -817,3 +817,30 @@ func TestCorpusModel(t *testing.T) {
 	}
 	t.Logf("corpus files: %d, jobs: %d, diagnostic codes: %d", len(files), jobs, len(keys))
 }
+
+func TestVersionHint(t *testing.T) {
+	tests := []struct {
+		comment string
+		want    string
+	}{
+		{"v4.1.1", "v4.1.1"},
+		{"4.2", "4.2"},
+		{"v4 pinned by bot", "v4"},
+		{"v4\tpinned", "v4"},
+		{"v4.1.1-beta", ""},
+		{"tag=v4", ""},
+		{"pinned", ""},
+		{"", ""},
+		{"v", ""},
+	}
+	for _, tt := range tests {
+		if got := versionHint(tt.comment); got != tt.want {
+			t.Errorf("versionHint(%q) = %q, want %q", tt.comment, got, tt.want)
+		}
+	}
+	w, _ := parse(t, "on: push\njobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v4.1.1\n      - uses: actions/cache@v4 # 4.0\n      - uses: actions/setup-go@v5\n")
+	steps := w.Jobs[0].Steps
+	if steps[0].Uses.VersionHint != "v4.1.1" || steps[1].Uses.VersionHint != "4.0" || steps[2].Uses.VersionHint != "" {
+		t.Errorf("hints = %q %q %q", steps[0].Uses.VersionHint, steps[1].Uses.VersionHint, steps[2].Uses.VersionHint)
+	}
+}

@@ -146,6 +146,7 @@ type ActionRef struct {
 	Docker      bool
 	DockerImage string
 	FirstParty  bool
+	VersionHint string
 	Pos         source.Position
 }
 
