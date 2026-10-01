@@ -1,0 +1,11 @@
+name: CI
+on: push
+jobs:
+  build:
+    runs-on: &runner ubuntu-22.04
+    steps:
+      - run: make build
+  test:
+    runs-on: *runner
+    steps:
+      - run: make test

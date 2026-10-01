@@ -1,0 +1,45 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "2",
+    "depth": 1,
+    "width": 2,
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "2",
+    "depth": 1,
+    "width": 2,
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "job.runner_changed",
+      "significance": "normal",
+      "subject": "build",
+      "before": "ubuntu-latest",
+      "after": "macos-latest",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 5,
+        "column": 14,
+        "end_line": 5,
+        "end_column": 25,
+        "path": "jobs.build.runs-on"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

@@ -1,0 +1,45 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "permissions.removed",
+      "significance": "high",
+      "subject": "workflow",
+      "before": "",
+      "after": "",
+      "detail": "",
+      "pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      },
+      "base_pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 4,
+        "column": 3,
+        "end_line": 4,
+        "end_column": 16,
+        "path": "permissions"
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

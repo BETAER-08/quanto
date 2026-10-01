@@ -1,0 +1,45 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "4",
+    "depth": 2,
+    "width": 3,
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "?",
+    "depth": 2,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "matrix.dynamic",
+      "significance": "normal",
+      "subject": "test",
+      "before": "",
+      "after": "",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 16,
+        "column": 9,
+        "end_line": 16,
+        "end_column": 51,
+        "path": "jobs.test.strategy.matrix"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

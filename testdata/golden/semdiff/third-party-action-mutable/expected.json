@@ -1,0 +1,45 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "action.third_party_added",
+      "significance": "high",
+      "subject": "peter-evans/create-pull-request",
+      "before": "",
+      "after": "v6",
+      "detail": " (mutable ref)",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 13,
+        "column": 15,
+        "end_line": 13,
+        "end_column": 48,
+        "path": "jobs.update.steps[2].uses"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

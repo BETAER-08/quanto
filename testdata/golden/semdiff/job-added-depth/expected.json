@@ -1,0 +1,69 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "2",
+    "depth": 2,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "3",
+    "depth": 3,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "job.added",
+      "significance": "normal",
+      "subject": "deploy",
+      "before": "",
+      "after": "",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 13,
+        "column": 3,
+        "end_line": 13,
+        "end_column": 8,
+        "path": "jobs.deploy"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    },
+    {
+      "kind": "graph.depth_changed",
+      "significance": "normal",
+      "subject": "",
+      "before": "2",
+      "after": "3",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 3,
+        "column": 1,
+        "end_line": 3,
+        "end_column": 4,
+        "path": "jobs"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

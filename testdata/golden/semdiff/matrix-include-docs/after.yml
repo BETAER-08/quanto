@@ -1,0 +1,20 @@
+name: CI
+on: push
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        fruit: [apple, pear]
+        animal: [cat, dog]
+        include:
+          - color: green
+          - color: pink
+            animal: cat
+          - fruit: apple
+            shape: circle
+          - fruit: banana
+          - fruit: banana
+            animal: cat
+    steps:
+      - run: echo "${{ matrix.fruit }} ${{ matrix.animal }}"

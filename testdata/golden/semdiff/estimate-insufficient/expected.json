@@ -1,0 +1,69 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "3",
+    "depth": 2,
+    "width": 2,
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "5",
+    "depth": 2,
+    "width": 4,
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "matrix.count_changed",
+      "significance": "high",
+      "subject": "test",
+      "before": "2",
+      "after": "4",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 14,
+        "column": 9,
+        "end_line": 14,
+        "end_column": 75,
+        "path": "jobs.test.strategy.matrix"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    },
+    {
+      "kind": "graph.width_changed",
+      "significance": "normal",
+      "subject": "",
+      "before": "2",
+      "after": "4",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 3,
+        "column": 1,
+        "end_line": 3,
+        "end_column": 4,
+        "path": "jobs"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

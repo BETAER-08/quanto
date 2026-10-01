@@ -1,0 +1,45 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": 1,
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "action.pin_removed",
+      "significance": "high",
+      "subject": "docker/setup-buildx-action",
+      "before": "b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2",
+      "after": "v3",
+      "detail": "",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 8,
+        "column": 15,
+        "end_line": 8,
+        "end_column": 43,
+        "path": "jobs.image.steps[1].uses"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

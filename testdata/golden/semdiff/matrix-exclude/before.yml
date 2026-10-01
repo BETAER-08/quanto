@@ -1,0 +1,12 @@
+name: CI
+on: push
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+        version: [12, 14, 16]
+        environment: [staging, production]
+    steps:
+      - run: ./test.sh ${{ matrix.version }} ${{ matrix.environment }}

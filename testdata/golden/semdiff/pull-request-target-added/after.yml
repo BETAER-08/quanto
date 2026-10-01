@@ -1,0 +1,7 @@
+name: Label
+on: [push, pull_request_target]
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5

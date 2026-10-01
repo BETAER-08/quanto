@@ -1,0 +1,7 @@
+name: Label
+on: [push]
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5

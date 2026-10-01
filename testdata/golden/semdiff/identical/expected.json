@@ -1,0 +1,20 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "3",
+    "depth": 2,
+    "width": 2,
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "3",
+    "depth": 2,
+    "width": 2,
+    "runner_minutes": ""
+  },
+  "findings": [],
+  "estimate": null,
+  "error": ""
+}

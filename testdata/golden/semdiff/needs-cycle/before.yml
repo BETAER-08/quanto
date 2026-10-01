@@ -1,0 +1,12 @@
+name: CI
+on: push
+jobs:
+  a:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make a
+  b:
+    needs: a
+    runs-on: ubuntu-latest
+    steps:
+      - run: make b
