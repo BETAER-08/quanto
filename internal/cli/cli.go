@@ -22,6 +22,7 @@ const usageText = `usage:
   quanto serve --role web|worker|all
   quanto migrate
   quanto manifest --webhook-url <url> --homepage-url <url> [--name quanto]
+  quanto action
 `
 
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -42,6 +43,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runMigrate(args[1:], stdout, stderr)
 	case "manifest":
 		return runManifest(args[1:], stdout, stderr)
+	case "action":
+		return runAction(args[1:], stdout, stderr)
 	}
 	fmt.Fprintf(stderr, "quanto: unknown command %q\n%s", args[0], usageText)
 	return exitUsage

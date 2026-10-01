@@ -23,6 +23,7 @@ fuzz:
 	go test -run '^$$' -fuzz FuzzParseTemplate -fuzztime $(FUZZTIME) ./core/expr/
 	go test -run '^$$' -fuzz FuzzExpand -fuzztime $(FUZZTIME) ./core/matrix/
 	go test -run '^$$' -fuzz FuzzCompare -fuzztime $(FUZZTIME) ./core/semdiff/
+	go test -run '^$$' -fuzz FuzzCommand -fuzztime $(FUZZTIME) ./internal/action/
 
 corpus:
 	./scripts/fetch-corpus.sh
