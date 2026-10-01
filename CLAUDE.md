@@ -194,7 +194,7 @@ func (e *SyntaxError) Pos() Position
 5. **줄 인덱스는 CRLF를 LF로 정규화해서 만든다.**
 6. **논리 경로.** 루트는 `""`다. 매핑 키는 `부모 + "." + 키`(부모가 빈 문자열이면 키 자체)다. 키가 비었거나 `. [ ] ' "` 공백·탭 중 하나를 포함하면 `부모 + "['" + (작은따옴표를 두 개로 바꾼 키) + "']"`다. 시퀀스 항목은 `부모 + "[i]"`다. 모든 노드에 대해 `root.Lookup(n.Path())`는 같은 Position을 가진 노드를 돌려줘야 한다.
 7. **별칭 해석.** 값이 별칭 노드면 대상 노드의 내용을 투명하게 노출한다. 해당 Node의 Position은 별칭 토큰의 위치를 쓴다. `Kind()`는 대상의 Kind를 돌려준다.
-8. **머지 키 `<<`.** `Field`, `FieldKey`, `Has`, `Fields`, `Keys`는 `<<`의 값(매핑, 매핑의 별칭, 또는 그런 것들의 시퀀스)에 있는 키를 포함한다. 명시 키가 머지 키보다 우선한다. 시퀀스 안에서는 앞쪽 항목이 우선한다. `<<` 자체는 `Fields`와 `Keys` 결과에 포함하지 않는다. 머지로 들어온 필드의 Position은 앵커 정의 쪽 위치다. 해석 깊이가 64를 넘으면 더 따라가지 않는다.
+8. **머지 키 `<<`.** `Field`, `FieldKey`, `Has`, `Fields`, `Keys`는 `<<`의 값(매핑, 매핑의 별칭, 또는 그런 것들의 시퀀스)에 있는 키를 포함한다. 명시 키가 머지 키보다 우선한다. 시퀀스 안에서는 앞쪽 항목이 우선한다. `<<` 자체는 `Fields`와 `Keys` 결과에 포함하지 않는다. 머지로 들어온 필드의 Position은 앵커 정의 쪽 위치다. 해석 깊이가 64를 넘으면 더 따라가지 않는다. 한 번의 해석 안에서 매핑 노드별 결과를 메모이제이션해서 `<<: [*a, *a]` 중첩이 지수적으로 폭증하지 않게 한다. **GitHub Actions는 앵커와 별칭은 지원하지만 머지 키는 문법 오류로 거부한다.** 머지 키 해석은 YAML 상위 호환을 위해 유지하되, 이 문서의 다른 모든 테스트와 골든 케이스는 머지 키를 쓰지 않고 앵커·별칭만 쓴다.
 9. **`Walk`는 별칭을 따라가지 않는다.** 별칭은 리프로 방문한다. 이는 별칭 폭증 입력에 대한 방어다.
 10. **빈 문서.** 빈 입력이나 주석만 있는 입력은 에러 없이 `Empty() == true`, `Root() == nil`이다.
 11. **nil 안전.** 모든 `*Node` 메서드는 nil 수신자에서 패닉 없이 영값을 돌려준다. `root.Field("a").Field("b").Index(3).Field("c").Exists()`는 중간이 없어도 false다.
@@ -464,7 +464,7 @@ type ReusableRef struct {
 
 ### 6.4 필수 테스트
 
-트리거 세 형태, 필터와 types 스칼라·리스트, 스케줄, dispatch 입력, needs 두 형태, runs-on 세 형태와 동적 라벨, permissions 네 형태, 액션 참조 전 유형(원격, 경로 포함 원격, SHA 40자, 짧은 SHA는 Mutable, local, docker, @ 없음), FirstParty 판정, 재사용 워크플로 잡과 secrets inherit, 머지 키로 공유한 runs-on, 표현식 오류가 있는 if, 코퍼스 전체 파싱 무오류.
+트리거 세 형태, 필터와 types 스칼라·리스트, 스케줄, dispatch 입력, needs 두 형태, runs-on 세 형태와 동적 라벨, permissions 네 형태, 액션 참조 전 유형(원격, 경로 포함 원격, SHA 40자, 짧은 SHA는 Mutable, local, docker, @ 없음), FirstParty 판정, 재사용 워크플로 잡과 secrets inherit, 앵커·별칭으로 공유한 runs-on(`runs-on: &runner ubuntu-latest`와 `runs-on: *runner`), 표현식 오류가 있는 if, 코퍼스 전체 파싱 무오류.
 
 ---
 
@@ -761,7 +761,7 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 `testdata/golden/semdiff/<case>/` 아래 `before.yml`, `after.yml`, `expected.json`을 둔다. 파일이 없는 쪽은 `before.yml`이나 `after.yml`을 두지 않는다. 최소 케이스는 다음과 같다.
 
 1. `identical`
-2. `reformatted` (플로우 ↔ 블록, 따옴표, 주석, 키 순서, 앵커 도입) → Finding 0
+2. `reformatted` (플로우 ↔ 블록, 따옴표, 주석, 키 순서, 같은 값을 앵커·별칭으로 바꾸기) → Finding 0
 3. `matrix-axis-added` (6 → 24)
 4. `matrix-include-docs` (7.3의 문서 예제를 잡 매트릭스로)
 5. `matrix-exclude` (12 → 9)
@@ -783,7 +783,7 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 21. `workflow-added`
 22. `workflow-removed`
 23. `head-unparseable`
-24. `anchor-shared-change` (앵커 안의 runs-on 변경이 두 잡에 모두 반영)
+24. `anchor-shared-change` (`runs-on: &runner ...`로 정의하고 다른 잡에서 `*runner`로 참조. 앵커 정의 한 줄 변경이 두 잡의 `job.runner_changed` 두 건으로 나와야 한다. 머지 키는 쓰지 않는다)
 25. `estimate-with-history` (가짜 DurationSource로 샘플 충분)
 26. `estimate-insufficient` (샘플 4개 → 추정 없음)
 
@@ -1187,7 +1187,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 ## 18. CI (`.github/workflows/ci.yml`)
 
 - 트리거: `push`와 `pull_request`. 워크플로 수준 `permissions: contents: read`.
-- `test` 잡: `ubuntu-latest`, checkout, `setup-go`(`go-version-file: go.mod`), `test -z "$(gofmt -l .)"`, `go vet ./...`, `go run scripts/check-comments.go`, `go test -race ./...`, `scripts/fetch-corpus.sh`, `go test -run Corpus ./...`, 퍼즈 대상마다 `go test -run '^$' -fuzz <대상> -fuzztime 20s <패키지>`.
+- `test` 잡: `ubuntu-latest`, checkout, `setup-go`(`go-version-file: go.mod`), `test -z "$(gofmt -l .)"`, `go vet ./...`, `go run scripts/check-comments.go`, `go test -race ./...`, `scripts/fetch-corpus.sh`, `go test -run Corpus ./...`, 퍼즈 대상마다 `go test -run '^$' -fuzz <대상> -fuzztime 20s -fuzzminimizetime 5s <패키지>`. 최소화 기본값(60초)이 퍼즈 시간을 잡아먹지 않게 하기 위해서다.
 - `integration` 잡: `services.postgres`(`postgres:16`, 헬스체크 포함), `QUANTO_TEST_DATABASE_URL` 설정 후 `go test -race ./internal/...`.
 - 액션 참조는 `actions/checkout@v4`, `actions/setup-go@v5`를 쓴다.
 

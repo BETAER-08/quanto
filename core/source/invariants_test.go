@@ -56,21 +56,25 @@ jobs:
     secrets:
       token: ${{ secrets.TOKEN }}
 `,
-	"anchors": `x-defaults: &defaults
-  runs-on: ubuntu-latest
-  timeout-minutes: 10
-jobs:
+	"anchors": `jobs:
   a:
-    <<: *defaults
+    runs-on: &runner ubuntu-latest
+    timeout-minutes: &timeout 10
+    env: &env
+      CI: "true"
     steps: &steps
       - run: echo a
   b:
-    <<: *defaults
-    runs-on: macos-latest
+    runs-on: *runner
+    timeout-minutes: *timeout
+    env: *env
     steps: *steps
   c:
-    <<: [*defaults]
-    env: {A: 1}
+    runs-on: [*runner, self-hosted]
+    steps:
+      - &checkout
+        uses: actions/checkout@v4
+      - *checkout
 `,
 	"korean": `name: 빌드와 테스트
 on: push
