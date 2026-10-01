@@ -1,0 +1,5 @@
+`.github/workflows/ci.yml` (modified)
+  Jobs per run: 1 → 2
+  Longest `needs` chain: 1 → 2
+  - [normal] Job added: `publish`
+  - [normal] Longest `needs` chain: 1 → 2 jobs

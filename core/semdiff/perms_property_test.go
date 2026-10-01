@@ -81,6 +81,9 @@ func checkPermissionCoverage(t *testing.T, before, after *model.Workflow, d *Fil
 		}
 		bj, paired := beforeJobs[bid]
 		if !paired {
+			if !aj.Permissions.Declared {
+				continue
+			}
 			for s := range propScopes(ea) {
 				if propLevel(ea, s) == model.LevelWrite && !covered(d, subject, s) {
 					t.Errorf("added job %s scope %s is write without a covering finding: %v", aj.ID, s, kindList(d))
@@ -134,9 +137,21 @@ func TestPermissionInheritanceNotDuplicated(t *testing.T) {
 		t.Errorf("removed partial = %+v", removedPartial.Findings)
 	}
 	newInherit := diff(t, "on: push\npermissions: {contents: write}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n", "on: push\npermissions: {contents: write}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n  c: {runs-on: x, steps: [{run: c}]}\n")
-	got := findingsOf(newInherit, kindPermissionsBroadened)
-	if len(got) != 1 || got[0].Subject != "job `c`" || got[0].Before != newJobLevel || got[0].Detail != "contents" {
+	if n := len(findingsOf(newInherit, kindPermissionsBroadened)) + len(findingsOf(newInherit, kindPermissionsWriteAll)); n != 0 {
 		t.Errorf("new inheriting job = %+v", newInherit.Findings)
+	}
+	newInheritAll := diff(t, "on: push\npermissions: write-all\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n", "on: push\npermissions: write-all\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n  c: {runs-on: x, steps: [{run: c}]}\n")
+	if n := len(findingsOf(newInheritAll, kindPermissionsBroadened)) + len(findingsOf(newInheritAll, kindPermissionsWriteAll)); n != 0 {
+		t.Errorf("new job inheriting write-all = %+v", newInheritAll.Findings)
+	}
+	newDeclared := diff(t, "on: push\npermissions: {contents: write}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n", "on: push\npermissions: {contents: write}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n  c: {runs-on: x, permissions: {contents: write, issues: read}, steps: [{run: c}]}\n")
+	got := findingsOf(newDeclared, kindPermissionsBroadened)
+	if len(got) != 1 || got[0].Subject != "job `c`" || got[0].Before != newJobLevel || got[0].Detail != "contents" {
+		t.Errorf("new declaring job = %+v", newDeclared.Findings)
+	}
+	newDeclaredRead := diff(t, "on: push\npermissions: {}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n", "on: push\npermissions: {}\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n  c: {runs-on: x, permissions: read-all, steps: [{run: c}]}\n")
+	if n := len(findingsOf(newDeclaredRead, kindPermissionsBroadened)) + len(findingsOf(newDeclaredRead, kindPermissionsWriteAll)); n != 0 {
+		t.Errorf("new read-all job = %+v", newDeclaredRead.Findings)
 	}
 	unknown := diff(t, "on: push\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n", "on: push\njobs:\n  a: {runs-on: x, steps: [{run: a}]}\n  c: {runs-on: x, steps: [{run: c}]}\n")
 	if n := len(findingsOf(unknown, kindPermissionsBroadened)); n != 0 {

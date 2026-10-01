@@ -76,6 +76,7 @@ var goldenKinds = map[string][]string{
 	"permissions-job-write-added":   {kindPermissionsBroadened},
 	"permissions-job-write-removed": {kindPermissionsNarrowed},
 	"permissions-new-job-write-all": {kindPermissionsWriteAll, kindJobAdded, kindGraphWidthChanged},
+	"permissions-new-job-inherits":  {kindJobAdded, kindGraphDepthChanged},
 	"permissions-release-split":     {kindPermissionsNarrowed, kindPermissionsNarrowed},
 	"action-sha-version-hint":       {kindActionRefChanged, kindActionRefChanged},
 	"trigger-filter-changed":        {kindTriggerFilterChanged, kindTriggerFilterChanged, kindTriggerFilterChanged, kindTriggerFilterChanged},

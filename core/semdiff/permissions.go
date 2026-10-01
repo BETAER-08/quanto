@@ -183,7 +183,7 @@ func (c *comparer) jobPermissionChanges(bj, aj *model.Job) {
 }
 
 func (c *comparer) addedJobPermissions(aj *model.Job) {
-	ea := effective(aj.Permissions, c.after.wf.Permissions)
+	ea := aj.Permissions
 	if !ea.Declared {
 		return
 	}

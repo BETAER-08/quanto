@@ -120,8 +120,8 @@ func checkGolden(t *testing.T, path string, got []byte) {
 }
 
 func TestGoldenCount(t *testing.T) {
-	if n := len(goldenCaseNames(t)); n != 32 {
-		t.Fatalf("golden cases = %d, want 32", n)
+	if n := len(goldenCaseNames(t)); n != 33 {
+		t.Fatalf("golden cases = %d, want 33", n)
 	}
 }
 
