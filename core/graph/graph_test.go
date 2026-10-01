@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -182,6 +183,15 @@ func TestWeightedWidth(t *testing.T) {
 	}
 	if w := g.Width(map[string]int{"left": 0, "right": 0}); w != 1 {
 		t.Errorf("Width = %d", w)
+	}
+	if w := g.Width(map[string]int{"left": math.MaxInt, "right": math.MaxInt}); w != math.MaxInt {
+		t.Errorf("saturated Width = %d", w)
+	}
+	if w := g.Width(map[string]int{"left": math.MaxInt, "right": 1}); w != math.MaxInt {
+		t.Errorf("saturated Width = %d", w)
+	}
+	if w := g.Width(map[string]int{"left": math.MaxInt - 5, "right": 3}); w != math.MaxInt-2 {
+		t.Errorf("near-limit Width = %d", w)
 	}
 }
 

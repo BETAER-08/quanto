@@ -1,6 +1,7 @@
 package graph
 
 import (
+	"math"
 	"sort"
 	"time"
 
@@ -212,12 +213,22 @@ func (g *Graph) Width(weights map[string]int) int {
 		if !ok {
 			w = 1
 		}
-		sums[lv] += w
+		sums[lv] = addSat(sums[lv], w)
 		if sums[lv] > width {
 			width = sums[lv]
 		}
 	}
 	return width
+}
+
+func addSat(a, b int) int {
+	if b > 0 && a > math.MaxInt-b {
+		return math.MaxInt
+	}
+	if b < 0 && a < math.MinInt-b {
+		return math.MinInt
+	}
+	return a + b
 }
 
 func (g *Graph) ordered() []string {
