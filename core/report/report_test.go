@@ -208,9 +208,13 @@ func TestMarkdownNoTableWhenMetricsEqual(t *testing.T) {
 
 func paddedDiff(path string, pad int) *semdiff.FileDiff {
 	d := &semdiff.FileDiff{Path: path, Status: semdiff.StatusUnanalyzable}
+	fill := "가"
+	if path == "b.yml" {
+		fill = "나"
+	}
 	for pad > 0 {
 		n := min(pad, 50)
-		d.Findings = append(d.Findings, semdiff.Finding{Kind: "workflow.unanalyzable", Significance: semdiff.Normal, Detail: strings.Repeat("가", n)})
+		d.Findings = append(d.Findings, semdiff.Finding{Kind: "workflow.unanalyzable", Significance: semdiff.Normal, Detail: strings.Repeat(fill, n)})
 		pad -= n
 	}
 	if len(d.Findings) == 0 {
@@ -469,5 +473,44 @@ func TestTextStripsTerminalControls(t *testing.T) {
 	}
 	if !strings.Contains(out, "Job added: `safe EVIL`") {
 		t.Errorf("text output = %q", out)
+	}
+}
+
+func TestAcrossFilesMerged(t *testing.T) {
+	bump := semdiff.Finding{Kind: "action.ref_changed", Significance: semdiff.Normal, Subject: "actions/checkout", Before: "v4", After: "v5"}
+	low := semdiff.Finding{Kind: "action.added", Significance: semdiff.Low, Subject: "actions/cache", After: "v4"}
+	metrics := semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: "1"}
+	mk := func(path string, fs ...semdiff.Finding) *semdiff.FileDiff {
+		return &semdiff.FileDiff{Path: path, Status: semdiff.StatusModified, Before: metrics, After: metrics, Findings: fs}
+	}
+	own := semdiff.Finding{Kind: "job.added", Significance: semdiff.Normal, Subject: "lint"}
+	diffs := []*semdiff.FileDiff{
+		mk(".github/workflows/c.yml", bump, low),
+		mk(".github/workflows/a.yml", bump, own, low),
+		mk(".github/workflows/b.yml", bump, low),
+		mk(".github/workflows/d.yml", semdiff.Finding{Kind: "job.added", Significance: semdiff.Normal, Subject: "docs"}),
+	}
+	md := Markdown(diffs, Meta{HeadSHA: "1234567"})
+	want := "Execution changes in 4 workflow files.\n\n### Across 3 workflow files\n\n- `actions/checkout`: `v4` → `v5` (3 files)\n\n### `.github/workflows/a.yml`\n\n- Job added: `lint`\n\n### `.github/workflows/d.yml`\n\n- Job added: `docs`\n\n---\n"
+	if !strings.Contains(md, want) {
+		t.Errorf("markdown:\n%s", md)
+	}
+	if strings.Contains(md, "b.yml") || strings.Contains(md, "c.yml") || strings.Contains(md, "actions/cache") {
+		t.Errorf("merged files or low findings shown:\n%s", md)
+	}
+	_, summary := CheckSummary(diffs, Meta{})
+	if !strings.Contains(summary, "### Across 3 workflow files\n\n- `actions/checkout`: `v4` → `v5` (3 files)\n- Action added: `actions/cache@v4` (3 files)\n\n") {
+		t.Errorf("summary:\n%s", summary)
+	}
+	if !strings.Contains(summary, "### `.github/workflows/a.yml`\n\n- Job added: `lint`\n\n") {
+		t.Errorf("summary file section:\n%s", summary)
+	}
+	merged := Markdown([]*semdiff.FileDiff{mk(".github/workflows/x.yml", own), mk(".github/workflows/y.yml", own)}, Meta{})
+	if !strings.Contains(merged, "Execution changes in 2 workflow files.\n\n### Across 2 workflow files\n\n- Job added: `lint` (2 files)\n\n---\n") {
+		t.Errorf("fully merged:\n%s", merged)
+	}
+	js, err := JSON(diffs, Meta{})
+	if err != nil || strings.Count(string(js), "actions/checkout") != 3 {
+		t.Errorf("json not per file: %v\n%s", err, js)
 	}
 }

@@ -895,7 +895,8 @@ Execution changes in 1 workflow file.
 - 파일이 부재한 쪽(추가·삭제·분석 불가)의 표 셀은 `—`다. 추정 행은 양쪽 값이 모두 있을 때만 넣는다.
 - `SkippedFiles > 0`이면 푸터 앞에 `{n} additional workflow files were not analyzed.` 줄을 넣는다.
 - 커밋은 `HeadSHA` 앞 7자다.
-- 본문이 `MaxBodyRunes`를 넘으면 마지막 파일부터 통째로 빼고 `{n} files omitted due to size.` 줄을 넣는다. 파일 중간에서 자르지 않는다.
+- **파일 간 중복 합치기.** `Markdown`과 `CheckSummary`에서, 각 렌더링이 보여 주는 Finding(Markdown은 Normal 이상, CheckSummary는 Low 포함) 중 `Message` 결과가 완전히 같은 것이 서로 다른 2개 이상 파일에 나오면, 그 Finding을 파일별 섹션에서 모두 빼고 첫 파일 섹션 앞의 `### Across {N} workflow files` 섹션에 `- {문구} ({k} files)` 한 줄로 모은다. `{N}`은 합쳐진 줄에 관여한 서로 다른 파일 수, `{k}`는 그 문구가 나온 파일 수다. 줄 순서는 파일 경로 사전순·파일 안 Finding 순서로 처음 나타난 순서다. 합친 뒤 남은 Finding도 없고 표도 없는 파일 섹션은 내지 않는다. 머리글의 `Execution changes in {n} workflow files.`는 합치기 전 기준으로 센다. `Annotations`와 `JSON`은 합치지 않고 파일별로 그대로 낸다.
+- 본문이 `MaxBodyRunes`를 넘으면 마지막 파일부터 통째로 빼고 `{n} files omitted due to size.` 줄을 넣는다. 파일 중간에서 자르지 않는다. `Across` 섹션은 빼지 않는다.
 - `CheckSummary`: Finding이 없으면 title은 `No execution changes`, summary는 분석한 파일 목록이다. 있으면 title은 `{n} execution changes` (Low 포함 전체 개수)이고, summary는 Markdown과 같은 구조에 Low를 포함하고 마커를 뺀 것이다.
 - `Annotations`: `Pos.Valid()`인 Finding만 대상이다. Level은 항상 `notice`다. Title은 Kind다(9.4 표에 없는 Kind면 `inline(Kind)`). 시작과 종료가 같은 줄일 때만 컬럼을 채우고, 아니면 컬럼은 0이다.
 - `JSON`: 최상위 `{"schema": "quanto.diff/v1", "head_sha": ..., "skipped_files": ..., "files": [...]}`. 필드명은 snake_case다. 들여쓰기 2칸, 끝에 개행 하나.

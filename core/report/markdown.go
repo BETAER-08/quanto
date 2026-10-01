@@ -68,17 +68,78 @@ func notes(b *strings.Builder, omitted int, meta Meta) {
 	}
 }
 
+type sharedLine struct {
+	message string
+	files   int
+}
+
+func shareAcrossFiles(blocks []fileBlock) ([]fileBlock, []sharedLine, int) {
+	filesOf := make(map[string]map[int]bool)
+	var order []string
+	for i, blk := range blocks {
+		for _, f := range blk.findings {
+			m := Message(f)
+			if filesOf[m] == nil {
+				filesOf[m] = make(map[int]bool)
+				order = append(order, m)
+			}
+			filesOf[m][i] = true
+		}
+	}
+	var shared []sharedLine
+	involved := make(map[int]bool)
+	for _, m := range order {
+		if len(filesOf[m]) < 2 {
+			continue
+		}
+		shared = append(shared, sharedLine{message: m, files: len(filesOf[m])})
+		for i := range filesOf[m] {
+			involved[i] = true
+		}
+	}
+	if len(shared) == 0 {
+		return blocks, nil, 0
+	}
+	var out []fileBlock
+	for _, blk := range blocks {
+		var kept []semdiff.Finding
+		for _, f := range blk.findings {
+			if len(filesOf[Message(f)]) < 2 {
+				kept = append(kept, f)
+			}
+		}
+		if len(kept) == 0 && !blk.table {
+			continue
+		}
+		out = append(out, fileBlock{diff: blk.diff, findings: kept, table: blk.table})
+	}
+	return out, shared, len(involved)
+}
+
+func writeShared(b *strings.Builder, shared []sharedLine, files int) {
+	if len(shared) == 0 {
+		return
+	}
+	b.WriteString("### Across " + plural(files, "workflow file", "workflow files") + "\n\n")
+	for _, l := range shared {
+		b.WriteString("- " + l.message + " (" + plural(l.files, "file", "files") + ")\n")
+	}
+	b.WriteString("\n")
+}
+
 func renderBody(prefix string, diffs []*semdiff.FileDiff, meta Meta, includeLow bool) string {
-	blocks := visibleBlocks(diffs, includeLow)
+	visible := visibleBlocks(diffs, includeLow)
+	blocks, shared, sharedFiles := shareAcrossFiles(visible)
 	head := prefix + "## quanto\n\n"
-	if len(blocks) == 0 {
+	if len(visible) == 0 {
 		head += "No execution changes in " + plural(len(sortedDiffs(diffs)), "workflow file", "workflow files") + ".\n\n"
 	} else {
-		head += "Execution changes in " + plural(len(blocks), "workflow file", "workflow files") + ".\n\n"
+		head += "Execution changes in " + plural(len(visible), "workflow file", "workflow files") + ".\n\n"
 	}
 	render := func(shown int) string {
 		var b strings.Builder
 		b.WriteString(head)
+		writeShared(&b, shared, sharedFiles)
 		for _, blk := range blocks[:shown] {
 			writeBlock(&b, blk)
 		}
