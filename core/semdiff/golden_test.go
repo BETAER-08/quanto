@@ -77,6 +77,7 @@ var goldenKinds = map[string][]string{
 	"permissions-job-write-removed": {kindPermissionsNarrowed},
 	"permissions-new-job-write-all": {kindPermissionsWriteAll, kindJobAdded, kindGraphWidthChanged},
 	"permissions-release-split":     {kindPermissionsNarrowed, kindPermissionsNarrowed},
+	"trigger-filter-changed":        {kindTriggerFilterChanged, kindTriggerFilterChanged, kindTriggerFilterChanged, kindTriggerFilterChanged},
 }
 
 func loadGoldenSide(t *testing.T, dir, name string) (*Input, bool) {

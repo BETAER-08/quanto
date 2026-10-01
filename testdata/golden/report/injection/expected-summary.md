@@ -14,7 +14,7 @@ Execution changes in 2 workflow files.
 
 - New third-party action: ``` ``evil/two@main ``` (mutable ref)
 - New third-party action: ``evil/act@v1`x` @someone`` (mutable ref)
-- `push` `branches` filter: `main` → `<details>, @org/admins, x  ## Approved`
+- `push` `branches` filter: −`main` +`<details>`, `@org/admins`, `x  ## Approved`
 - Schedule: `(none)` → `'<!-- quanto:summary -->'`
 - Job added: ``a`b``
 - Job `build` runs-on: `ubuntu-latest` → `x  ## Approved by security team ![](https://evil.example/p.png) @org/admins`
@@ -37,7 +37,7 @@ Execution changes in 2 workflow files.
 - Could not analyze: `<!-- quanto:summary -->`
 - Trigger added: ```` ``` ````
 - Trigger removed: `<details>`
-- `<!-- quanto:summary -->` ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…```` filter: `` `lead and trail` `` → `[link](https://evil.example)`
+- `<!-- quanto:summary -->` ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…```` filter: −`` `lead and trail` `` +`[link](https://evil.example)`
 - Schedule: `[link](https://evil.example)` → ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…````
 - Trigger added: `pull_request_target` (runs with base repository permissions and secrets)
 - Job added: ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…````

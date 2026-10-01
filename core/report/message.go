@@ -67,6 +67,17 @@ func scope(s string) string {
 	return inline(s)
 }
 
+func filterPart(sign, list string) string {
+	if list == "" {
+		return ""
+	}
+	parts := strings.Split(list, ", ")
+	for i, p := range parts {
+		parts[i] = inline(p)
+	}
+	return " " + sign + strings.Join(parts, ", ")
+}
+
 func Message(f semdiff.Finding) string {
 	s, b, a, d := f.Subject, f.Before, f.After, f.Detail
 	switch f.Kind {
@@ -83,7 +94,7 @@ func Message(f semdiff.Finding) string {
 	case "trigger.removed":
 		return "Trigger removed: " + inline(s)
 	case "trigger.filter_changed":
-		return inline(s) + " " + inline(d) + " filter: " + inline(b) + " → " + inline(a)
+		return inline(s) + " " + inline(d) + " filter:" + filterPart("−", b) + filterPart("+", a)
 	case "trigger.schedule_changed":
 		return "Schedule: " + inline(b) + " → " + inline(a)
 	case "trigger.pull_request_target_added":

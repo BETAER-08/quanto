@@ -27,7 +27,7 @@
     "end_column": 6,
     "level": "notice",
     "title": "trigger.filter_changed",
-    "message": "`push` `branches` filter: `main` → `\u003cdetails\u003e, @org/admins, x  ## Approved`"
+    "message": "`push` `branches` filter: −`main` +`\u003cdetails\u003e`, `@org/admins`, `x  ## Approved`"
   },
   {
     "path": ".github/workflows/ci.yml",
@@ -167,7 +167,7 @@
     "end_column": 5,
     "level": "notice",
     "title": "trigger.filter_changed",
-    "message": "`\u003c!-- quanto:summary --\u003e` ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```\u003cde…```` filter: `` `lead and trail` `` → `[link](https://evil.example)`"
+    "message": "`\u003c!-- quanto:summary --\u003e` ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```\u003cde…```` filter: −`` `lead and trail` `` +`[link](https://evil.example)`"
   },
   {
     "path": ".github/workflows/x`y\u003cdetails\u003e@org/admins.yml",

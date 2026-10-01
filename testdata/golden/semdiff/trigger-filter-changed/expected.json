@@ -1,0 +1,117 @@
+{
+  "path": ".github/workflows/ci.yml",
+  "old_path": "",
+  "status": "modified",
+  "before": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": "1",
+    "runner_minutes": ""
+  },
+  "after": {
+    "jobs_per_run": "1",
+    "depth": 1,
+    "width": "1",
+    "runner_minutes": ""
+  },
+  "findings": [
+    {
+      "kind": "trigger.filter_changed",
+      "significance": "normal",
+      "subject": "pull_request",
+      "before": "",
+      "after": "develop",
+      "detail": "branches",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 11,
+        "column": 3,
+        "end_line": 11,
+        "end_column": 14,
+        "path": "on.pull_request"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    },
+    {
+      "kind": "trigger.filter_changed",
+      "significance": "normal",
+      "subject": "pull_request",
+      "before": "",
+      "after": "docs/**",
+      "detail": "paths-ignore",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 11,
+        "column": 3,
+        "end_line": 11,
+        "end_column": 14,
+        "path": "on.pull_request"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    },
+    {
+      "kind": "trigger.filter_changed",
+      "significance": "normal",
+      "subject": "push",
+      "before": "",
+      "after": "hotfix/**",
+      "detail": "branches",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 3,
+        "column": 3,
+        "end_line": 3,
+        "end_column": 6,
+        "path": "on.push"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    },
+    {
+      "kind": "trigger.filter_changed",
+      "significance": "normal",
+      "subject": "push",
+      "before": "go.mod",
+      "after": "",
+      "detail": "paths",
+      "pos": {
+        "file": ".github/workflows/ci.yml",
+        "line": 3,
+        "column": 3,
+        "end_line": 3,
+        "end_column": 6,
+        "path": "on.push"
+      },
+      "base_pos": {
+        "file": "",
+        "line": 0,
+        "column": 0,
+        "end_line": 0,
+        "end_column": 0,
+        "path": ""
+      }
+    }
+  ],
+  "estimate": null,
+  "error": ""
+}

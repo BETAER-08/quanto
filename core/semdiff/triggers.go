@@ -72,11 +72,14 @@ func sortedUnique(ps []source.Positioned[string]) []string {
 	return slices.Compact(out)
 }
 
-func joinOrNone(vals []string) string {
-	if len(vals) == 0 {
-		return noneText
+func difference(a, b []string) []string {
+	var out []string
+	for _, v := range a {
+		if _, found := slices.BinarySearch(b, v); !found {
+			out = append(out, v)
+		}
 	}
-	return strings.Join(vals, ", ")
+	return out
 }
 
 func (c *comparer) filterChanges(bt, at model.Trigger) {
@@ -91,14 +94,15 @@ func (c *comparer) filterChanges(bt, at model.Trigger) {
 	keys = slices.Compact(keys)
 	for _, k := range keys {
 		bv, av := sortedUnique(bt.Filters[k]), sortedUnique(at.Filters[k])
-		if slices.Equal(bv, av) {
+		removed, added := difference(bv, av), difference(av, bv)
+		if len(removed) == 0 && len(added) == 0 {
 			continue
 		}
 		c.emit(Finding{
 			Kind:    kindTriggerFilterChanged,
 			Subject: at.Event,
-			Before:  joinOrNone(bv),
-			After:   joinOrNone(av),
+			Before:  strings.Join(removed, ", "),
+			After:   strings.Join(added, ", "),
 			Detail:  k,
 			Pos:     at.Pos,
 		})

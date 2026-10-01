@@ -3,7 +3,7 @@
   Max concurrent jobs: 1 → 2
   - [high] New third-party action: ``` ``evil/two@main ``` (mutable ref)
   - [high] New third-party action: ``evil/act@v1`x` @someone`` (mutable ref)
-  - [normal] `push` `branches` filter: `main` → `<details>, @org/admins, x  ## Approved`
+  - [normal] `push` `branches` filter: −`main` +`<details>`, `@org/admins`, `x  ## Approved`
   - [normal] Schedule: `(none)` → `'<!-- quanto:summary -->'`
   - [normal] Job added: ``a`b``
   - [normal] Job `build` runs-on: `ubuntu-latest` → `x  ## Approved by security team ![](https://evil.example/p.png) @org/admins`
@@ -21,7 +21,7 @@
   - [normal] Could not analyze: `<!-- quanto:summary -->`
   - [normal] Trigger added: ```` ``` ````
   - [normal] Trigger removed: `<details>`
-  - [normal] `<!-- quanto:summary -->` ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…```` filter: `` `lead and trail` `` → `[link](https://evil.example)`
+  - [normal] `<!-- quanto:summary -->` ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…```` filter: −`` `lead and trail` `` +`[link](https://evil.example)`
   - [normal] Schedule: `[link](https://evil.example)` → ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…````
   - [normal] Trigger added: `pull_request_target` (runs with base repository permissions and secrets)
   - [normal] Job added: ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…````

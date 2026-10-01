@@ -205,7 +205,7 @@ jobs:
 `
 	d := diff(t, before, after)
 	filters := findingsOf(d, kindTriggerFilterChanged)
-	if len(filters) != 2 || filters[0].Detail != "branches" || filters[0].Before != "main" || filters[0].After != "develop, main" || filters[1].Detail != "paths" || filters[1].After != "(none)" {
+	if len(filters) != 2 || filters[0].Detail != "branches" || filters[0].Before != "" || filters[0].After != "develop" || filters[1].Detail != "paths" || filters[1].Before != "src/**" || filters[1].After != "" {
 		t.Errorf("filters = %+v", filters)
 	}
 	if got := findingsOf(d, kindTriggerAdded); len(got) != 1 || got[0].Subject != "workflow_dispatch" {

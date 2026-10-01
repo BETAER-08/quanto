@@ -1,0 +1,5 @@
+`.github/workflows/ci.yml` (modified)
+  - [normal] `pull_request` `branches` filter: +`develop`
+  - [normal] `pull_request` `paths-ignore` filter: +`docs/**`
+  - [normal] `push` `branches` filter: +`hotfix/**`
+  - [normal] `push` `paths` filter: −`go.mod`

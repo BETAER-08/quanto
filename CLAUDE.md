@@ -698,7 +698,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 | `workflow.unanalyzable` | Normal | Could not analyze: {detail} |
 | `trigger.added` | Normal | Trigger added: `{subject}` |
 | `trigger.removed` | Normal | Trigger removed: `{subject}` |
-| `trigger.filter_changed` | Normal | `{subject}` `{detail}` filter: {before} → {after} |
+| `trigger.filter_changed` | Normal | `{subject}` `{detail}` filter: −{before} +{after} |
 | `trigger.schedule_changed` | Normal | Schedule: {before} → {after} |
 | `trigger.pull_request_target_added` | High | Trigger added: `pull_request_target` (runs with base repository permissions and secrets) |
 | `job.added` | Normal | Job added: `{subject}` |
@@ -734,7 +734,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 - `action.third_party_added`의 `{detail}`은 Mutable이면 ` (mutable ref)`, SHA면 빈 문자열이다. 같은 액션에 대해 `action.added`와 중복 보고하지 않는다(서드파티면 third_party_added만).
 - 액션 비교 단위는 `Identity()`다. 같은 Identity가 여러 스텝에 있으면 ref 집합으로 비교한다. 집합은 정렬해서 `, `로 연결해 표기한다.
 - `secrets.added`는 전후 `Workflow.SecretRefs`의 차집합이다.
-- 필터 변경 문구의 before/after는 값을 정렬해 `, `로 연결한다. 값이 없으면 `(none)`이다.
+- 필터 변경은 전체 목록이 아니라 차집합만 보고한다. `Before`는 제거된 원소(전에만 있는 값), `After`는 추가된 원소(후에만 있는 값)를 각각 정렬·중복 제거해 `, `로 연결한 것이다. 문구는 `−` 뒤에 제거 목록, `+` 뒤에 추가 목록을 쓰고, 한쪽이 비면 그 부분(기호 포함)을 생략한다. report는 각 목록을 `, `로 나눠 원소마다 `inline`으로 출력한다. 필터 키 자체가 추가·삭제된 경우도 같은 규칙이다.
 - **권한 비교 규칙 (실효 권한 기준).**
   - **실효 권한.** 워크플로 실효 권한은 워크플로 `permissions`가 선언돼 있으면 그 값이고, 없으면 "저장소 기본값"(알 수 없음)이다. 잡 실효 권한은 잡에 `permissions`가 선언돼 있으면 그 값이고, 없으면 워크플로 실효 권한이다.
   - **단위 변화 계산.** 한 단위의 전후 실효 권한 `(B, A)`에서 변화 항목 목록을 만든다. 둘 다 알 수 없음 → 없음. 알려짐 → 알 수 없음 → `permissions.removed`. 알 수 없음 → 알려짐 → `permissions.declared`. 둘 다 알려짐 → 후가 `write-all`이고 전이 아니면 `permissions.write_all` 하나만, 아니면 레벨 순서 `none < read < write`로 스코프별 `permissions.broadened`·`permissions.narrowed`. `read-all`은 모든 스코프가 read, `write-all`은 모든 스코프가 write인 것으로 펼친다. 비교할 스코프 이름 집합은 GitHub 공식 스코프 목록(`actions`, `attestations`, `checks`, `contents`, `deployments`, `discussions`, `id-token`, `issues`, `models`, `packages`, `pages`, `pull-requests`, `repository-projects`, `security-events`, `statuses`)과 전후에 명시된 스코프의 합집합이다. 명시되지 않은 스코프는 none이다.
@@ -808,6 +808,7 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 28. `permissions-job-write-removed` (27의 역방향) → 잡 주체 `permissions.narrowed` 1건만
 29. `permissions-new-job-write-all` (워크플로 `permissions: {}`, `write-all` 잡 추가) → `permissions.write_all`(`Before = none (new job)`), `job.added`, `graph.width_changed`
 30. `permissions-release-split` (cargo-dist 형식 ruff `release.yml` 구조. 워크플로 `contents: write`를 `{}`로 바꾸고 필요한 잡에만 선언) → 워크플로 `contents` narrowed와 `plan` 잡 `contents` narrowed만. 상속만 하는 잡과 같은 레벨을 다시 선언한 잡은 보고하지 않는다
+31. `trigger-filter-changed` (검증 보고서 R3: `push`의 `branches`에 하나 추가·`paths`에서 하나 제거, `pull_request`의 `branches`에 하나 추가·`paths-ignore` 신설) → `trigger.filter_changed` 4건, 각 문구는 추가·제거 원소만 담는다
 
 **속성 테스트:** 코퍼스의 모든 파일에 대해 `Compare(a, a)`의 Finding이 0개다. 코퍼스의 인접 파일 쌍 `(a, b)`에 대해 다음 대응쌍마다 `Compare(a, b)`의 왼쪽 개수와 `Compare(b, a)`의 오른쪽 개수가 같다: (`trigger.added` + `trigger.pull_request_target_added`, `trigger.removed`), (`job.added`, `job.removed`), (`action.added` + `action.third_party_added`, `action.removed`), (`workflow.added`, `workflow.removed`). `job.renamed` 개수는 양방향이 같다. 퍼즈: 임의 YAML 두 개로 패닉하지 않는다.
 
@@ -852,7 +853,8 @@ func Plain(s string) string
   1. CR, LF, 탭과 기타 제어 문자(`unicode.IsControl`: C0, DEL, C1. ANSI ESC 포함)를 각각 공백 하나로 바꾼다.
   2. 80 rune을 넘으면 앞 79 rune + `…`로 자른다.
   3. 내부의 가장 긴 연속 백틱보다 하나 더 긴 백틱 펜스로 감싼다. 내용이 백틱으로 시작하거나 끝나면 펜스 안쪽 양쪽에 공백을 하나씩 넣는다. 내용이 비었으면 `` ` ` ``(공백 하나짜리 코드 스팬)를 낸다. 빈 펜스 ```` `` ````는 뒤따르는 코드 스팬과 짝이 어긋나 주입 경로가 되기 때문이다.
-- 9.4 표의 `{subject}`, `{before}`, `{after}`, `{detail}` 중 사용자 유래 값은 표에 백틱 표기가 있든 없든 필드 전체를 `inline`으로 출력한다. 필터 목록, 스케줄 표기(`'0 * * * *' (24 runs/day)`), runs-on 표기, `(none)`, 순환 경로(`a → b → a`)는 필드 하나로 감싼다. 권한 스코프 표기 `job `+"`id`"는 `job ` + `inline(id)`로 출력한다. `action.third_party_added`의 `{detail}`은 비어 있지 않으면 고정 문구 ` (mutable ref)`를 낸다.
+- 9.4 표의 `{subject}`, `{before}`, `{after}`, `{detail}` 중 사용자 유래 값은 표에 백틱 표기가 있든 없든 필드 전체를 `inline`으로 출력한다. 스케줄 표기(`'0 * * * *' (24 runs/day)`), runs-on 표기, `(none)`, 순환 경로(`a → b → a`)는 필드 하나로 감싼다. 권한 스코프 표기 `job `+"`id`"는 `job ` + `inline(id)`로 출력한다. `action.third_party_added`의 `{detail}`은 비어 있지 않으면 고정 문구 ` (mutable ref)`를 낸다.
+- `trigger.filter_changed`의 `{before}`, `{after}`는 `, `로 나눈 원소 하나하나를 `inline`으로 출력하고 `, `로 잇는다.
 - 숫자 필드(매트릭스 수, 그래프 깊이·너비, 추정 분, 샘플 수, Metrics 표의 값)는 `?`, 10진 정수, `≥` + 10진 정수일 때만 그대로 쓰고, 그 외 값은 `inline`으로 출력한다.
 - `Markdown`, `CheckSummary`, `Annotations`(message와 title), `Text`, `NoChanges` 전부 이 규칙을 따른다. `Text`의 파일 경로 줄도 `inline`을 거친다.
 - `Plain(s)`: `inline`의 1~2단계만 적용하고 펜스는 씌우지 않는다. `inline`은 `Plain`의 결과에 3단계를 적용하므로 두 출력의 정리 규칙은 같다. 테스트는 `ESC[31m`(색상), `ESC]0;title BEL`(창 제목), `\r` 덮어쓰기, C1 `CSI`, DEL, 80·81 rune 경계를 검증한다.
