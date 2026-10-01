@@ -1438,7 +1438,7 @@ func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta) (body string, publ
 - 설치 단계(bash): `RUNNER_OS`/`RUNNER_ARCH`를 `quanto-linux-amd64`, `quanto-linux-arm64`, `quanto-darwin-amd64`, `quanto-darwin-arm64`, `quanto-windows-amd64.exe` 중 하나로 매핑한다. 그 외 조합은 `::error` 후 종료 코드 1.
   - 저장소와 ref: `github.action_repository`, `version` 입력 또는 `github.action_ref`. 비어 있으면 `GITHUB_ACTION_PATH`의 `_actions/<owner>/<repo>/<ref>`에서 도출한다.
   - `GITHUB_ACTION_PATH`에 `/_actions/`가 없고(`uses: ./` 로컬 액션) `version`이 비었으면 릴리스를 받지 않고 action 디렉터리에서 `go build`로 만든다(Go가 설치돼 있어야 한다).
-  - 그 외에는 `https://github.com/<repo>/releases/download/<ref>/`에서 바이너리와 `checksums.txt`를 받고, 해당 파일의 sha256을 `checksums.txt`와 대조한다. 항목이 없거나 불일치하면 실행하지 않고 `::error` 후 종료 코드 1.
+  - 그 외에는 `https://github.com/<repo>/releases/download/<ref>/`에서 바이너리와 `checksums.txt`를 받고(받지 못하면 `::error` 후 종료 코드 1), 해당 파일의 sha256을 `checksums.txt`와 대조한다. 항목이 없거나 불일치하면 실행하지 않고 `::error` 후 종료 코드 1.
 - 실행 단계: `GITHUB_TOKEN`, `INPUT_COMMENT`, `INPUT_ESTIMATE`, `INPUT_MAX_FILES`를 env로 넘기고 `quanto action`을 실행한다. 입력 값을 `run:` 본문에 `${{ }}`로 직접 넣지 않는다.
 
 ### 23.5 릴리스와 도그푸딩

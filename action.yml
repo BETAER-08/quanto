@@ -1,0 +1,105 @@
+name: quanto
+description: Reports how a pull request changes the execution of GitHub Actions workflows.
+author: BETAER-08
+inputs:
+  github-token:
+    description: Token used to read the pull request and run history and to write the summary comment.
+    required: false
+    default: ${{ github.token }}
+  comment:
+    description: Create or update the summary comment on the pull request (true or false).
+    required: false
+    default: 'true'
+  estimate:
+    description: Estimate runner minutes from recent successful runs (true or false).
+    required: false
+    default: 'true'
+  max-files:
+    description: Maximum number of workflow files analyzed per pull request (1 to 200).
+    required: false
+    default: '50'
+  version:
+    description: Release tag to download. Empty means the tag the action is referenced by.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Install quanto
+      id: install
+      shell: bash
+      env:
+        QUANTO_VERSION: ${{ inputs.version }}
+        QUANTO_ACTION_REF: ${{ github.action_ref }}
+        QUANTO_ACTION_REPOSITORY: ${{ github.action_repository }}
+      run: |
+        set -euo pipefail
+        action_path="${GITHUB_ACTION_PATH//\\//}"
+        action_path="${action_path%/}"
+        dest="${RUNNER_TEMP}/quanto-action"
+        mkdir -p "$dest"
+        case "${RUNNER_OS}/${RUNNER_ARCH}" in
+          Linux/X64) asset=quanto-linux-amd64 ;;
+          Linux/ARM64) asset=quanto-linux-arm64 ;;
+          macOS/X64) asset=quanto-darwin-amd64 ;;
+          macOS/ARM64) asset=quanto-darwin-arm64 ;;
+          Windows/X64) asset=quanto-windows-amd64.exe ;;
+          *)
+            echo "::error title=quanto::unsupported runner ${RUNNER_OS}/${RUNNER_ARCH}"
+            exit 1
+            ;;
+        esac
+        repo="${QUANTO_ACTION_REPOSITORY:-}"
+        ref="${QUANTO_VERSION:-}"
+        case "$action_path" in
+          */_actions/*/*/*)
+            rest="${action_path##*/_actions/}"
+            owner="${rest%%/*}"
+            rest="${rest#*/}"
+            name="${rest%%/*}"
+            if [ -z "$repo" ]; then repo="${owner}/${name}"; fi
+            if [ -z "$ref" ]; then ref="${QUANTO_ACTION_REF:-}"; fi
+            if [ -z "$ref" ]; then ref="${rest#*/}"; fi
+            ;;
+          *)
+            if [ -z "$ref" ]; then
+              (cd "$action_path" && CGO_ENABLED=0 go build -trimpath -ldflags "-X main.version=source" -o "${dest}/${asset}" ./cmd/quanto)
+              echo "path=${dest}/${asset}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if [ -z "$repo" ]; then repo="${GITHUB_REPOSITORY}"; fi
+            ;;
+        esac
+        if [ -z "$repo" ] || [ -z "$ref" ]; then
+          echo "::error title=quanto::cannot determine the release to download; set the version input"
+          exit 1
+        fi
+        base="https://github.com/${repo}/releases/download/${ref}"
+        for file in "$asset" checksums.txt; do
+          if ! curl -fsSL --retry 3 -o "${dest}/${file}" "${base}/${file}"; then
+            echo "::error title=quanto::cannot download ${file} from release ${ref} of ${repo}"
+            exit 1
+          fi
+        done
+        expected="$(awk -v n="$asset" '$2 == n || $2 == "*" n { print $1; exit }' "${dest}/checksums.txt")"
+        if command -v sha256sum >/dev/null 2>&1; then
+          actual="$(sha256sum "${dest}/${asset}" | awk '{ print $1 }')"
+        else
+          actual="$(shasum -a 256 "${dest}/${asset}" | awk '{ print $1 }')"
+        fi
+        if [ -z "$expected" ] || [ "$expected" != "$actual" ]; then
+          rm -f "${dest}/${asset}"
+          echo "::error title=quanto::sha256 of ${asset} does not match checksums.txt of release ${ref}"
+          exit 1
+        fi
+        chmod +x "${dest}/${asset}"
+        echo "path=${dest}/${asset}" >> "$GITHUB_OUTPUT"
+    - name: Run quanto
+      shell: bash
+      env:
+        QUANTO_BIN: ${{ steps.install.outputs.path }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        INPUT_COMMENT: ${{ inputs.comment }}
+        INPUT_ESTIMATE: ${{ inputs.estimate }}
+        INPUT_MAX_FILES: ${{ inputs.max-files }}
+      run: '"$QUANTO_BIN" action'
