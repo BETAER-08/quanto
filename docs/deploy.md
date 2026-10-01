@@ -22,7 +22,7 @@ Run as the user that will run the services, so the image is in that user's Podma
 make image
 ```
 
-This runs `podman build -f deploy/Containerfile` and tags the result as `localhost/quanto:<version>` and `localhost/quanto:latest`. The Quadlet units use `localhost/quanto:latest`. Check the build:
+This runs `podman build -f deploy/Containerfile --ignorefile deploy/.containerignore`, which leaves `.git`, `bin` and `testdata/corpus` out of the build context, and tags the result as `localhost/quanto:<version>` and `localhost/quanto:latest`. The Quadlet units use `localhost/quanto:latest`. Check the build:
 
 ```sh
 podman run --rm localhost/quanto:latest version

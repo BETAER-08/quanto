@@ -64,6 +64,7 @@ testdata/corpus/            실제 워크플로 (gitignore, 스크립트로 수�
 scripts/fetch-corpus.sh
 scripts/check-comments.go
 deploy/Containerfile
+deploy/.containerignore
 deploy/quadlet/
 docs/
 .github/workflows/ci.yml
@@ -89,7 +90,7 @@ Makefile
 ## 3. 공통 규약
 
 - 모듈 경로는 `git remote get-url origin`의 결과에서 도출한다. `https://github.com/<owner>/<repo>.git` 또는 `git@github.com:<owner>/<repo>.git` 형태면 `github.com/<owner>/<repo>`다. 원격이 없으면 작업을 멈추고 사람에게 묻는다.
-- `go.mod`의 `go` 지시어는 설치된 Go의 `major.minor`로 쓴다. 1.23 미만이면 멈추고 보고한다.
+- `go.mod`의 `go` 지시어는 설치된 Go의 `major.minor.0` 형식으로 쓴다(현재 `go 1.24.0`). 1.23 미만이면 멈추고 보고한다. `major.minor`(`go 1.24`)는 쓸 수 없다. 의존성(`github.com/jackc/pgx/v5` v5.8.0, `golang.org/x/sync`, `golang.org/x/text`)이 `go 1.24.0`을 선언하고, Go 버전 순서에서 `1.24` < `1.24.0`이므로 `go 1.24`이면 빌드가 `go: updates to go.mod needed`로 실패하고 `go mod tidy`가 `1.24.0`으로 되돌린다. Containerfile의 golang 이미지 태그는 `major.minor`(`1.24`)다.
 - 로깅은 `log/slog` JSON 핸들러를 쓴다. 레벨은 `QUANTO_LOG_LEVEL`로 정한다.
 - 식별자와 코드는 영어로 쓴다. 사용자에게 보이는 출력(PR 코멘트, Check Run, CLI)도 영어로 쓴다.
 - 테스트는 표준 `testing`만 쓴다. 테이블 주도 테스트를 기본으로 한다.
@@ -1212,6 +1213,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 
 ## 17. 배포와 문서
 
+- `deploy/.containerignore`: `.git`, `bin`, `testdata/corpus` 세 줄이다. 빌드 컨텍스트에서 이들을 빼서 컨텍스트 크기와 레이어 캐시 무효화를 줄인다. 컨텍스트가 저장소 루트이므로 `make image`가 `podman build --ignorefile deploy/.containerignore`로 지정한다.
 - `deploy/Containerfile`: 빌드 스테이지는 `docker.io/library/golang:<go.mod 버전>`, `CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${VERSION}"`. 최종 스테이지는 `gcr.io/distroless/static-debian12:nonroot`. `ENTRYPOINT ["/quanto"]`.
 - `deploy/quadlet/`: `quanto.network`, `quanto-db.volume`, `quanto-db.container`(`docker.io/library/postgres:16`, `Secret=quanto-db-password`), `quanto-web.container`(`PublishPort=127.0.0.1:8080:8080`, `Exec=serve --role web`), `quanto-worker.container`(`Exec=serve --role worker`). App 개인키와 웹훅 시크릿은 Podman secret을 파일로 마운트하고 `*_FILE` 변수로 가리킨다. web과 worker는 db 뒤에 시작한다.
 - `quanto manifest`: GitHub App manifest JSON을 출력한다. `default_permissions`: `contents: read`, `checks: write`, `pull_requests: write`, `actions: read`, `metadata: read`. `default_events`: `pull_request`, `workflow_run`. `public: true`. `hook_attributes.url`과 `url`은 플래그 값이다. URL 형식을 검증한다.

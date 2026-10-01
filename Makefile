@@ -31,6 +31,6 @@ build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/quanto ./cmd/quanto
 
 image:
-	podman build -f deploy/Containerfile --build-arg VERSION=$(VERSION) -t localhost/quanto:$(VERSION) -t localhost/quanto:latest .
+	podman build -f deploy/Containerfile --ignorefile deploy/.containerignore --build-arg VERSION=$(VERSION) -t localhost/quanto:$(VERSION) -t localhost/quanto:latest .
 
 check: fmt-check vet comments test-race
