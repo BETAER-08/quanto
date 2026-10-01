@@ -1,0 +1,2 @@
+`.github/workflows/ci.yml` (modified)
+  - [normal] `contents` permission (workflow): `none` → `read`

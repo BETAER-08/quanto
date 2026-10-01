@@ -6,6 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/BETAER-08/quanto/core/model"
 	"github.com/BETAER-08/quanto/core/semdiff"
 	"github.com/BETAER-08/quanto/core/source"
 )
@@ -517,5 +518,55 @@ func TestAcrossFilesMerged(t *testing.T) {
 	js, err := JSON(diffs, Meta{})
 	if err != nil || strings.Count(string(js), "actions/checkout") != 3 {
 		t.Errorf("json not per file: %v\n%s", err, js)
+	}
+}
+
+func compareYAML(t *testing.T, path, before, after string) *semdiff.FileDiff {
+	t.Helper()
+	parse := func(content string) *model.Workflow {
+		doc, err := source.Load(path, []byte(content))
+		if err != nil {
+			t.Fatalf("load %s: %v", path, err)
+		}
+		w, _, err := model.Parse(doc)
+		if err != nil {
+			t.Fatalf("parse %s: %v", path, err)
+		}
+		return w
+	}
+	return semdiff.Compare(semdiff.Input{Path: path, Before: parse(before), After: parse(after)}, semdiff.Options{})
+}
+
+func TestPublishableReadOnlyBroadening(t *testing.T) {
+	const callerBefore = "on: push\npermissions: {}\njobs:\n  plan:\n    runs-on: ubuntu-latest\n    steps: [{run: plan}]\n  custom-build-binaries:\n    needs: plan\n    uses: ./.github/workflows/build-binaries.yml\n    secrets: inherit\n  custom-build-wasm:\n    needs: plan\n    uses: ./.github/workflows/build-wasm.yml\n    secrets: inherit\n"
+	callerAfter := strings.ReplaceAll(callerBefore, "    secrets: inherit\n", "    secrets: inherit\n    permissions:\n      \"contents\": \"read\"\n")
+	const workflowBefore = "name: Build\non: [pull_request, workflow_call]\npermissions: {}\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps: [{uses: actions/checkout@v4}, {run: make}]\n"
+	workflowAfter := strings.Replace(workflowBefore, "permissions: {}\n", "permissions:\n  contents: read\n", 1)
+	diffs := []*semdiff.FileDiff{
+		compareYAML(t, ".github/workflows/build-binaries.yml", workflowBefore, workflowAfter),
+		compareYAML(t, ".github/workflows/build-wasm.yml", workflowBefore, workflowAfter),
+		compareYAML(t, ".github/workflows/release.yml", callerBefore, callerAfter),
+	}
+	broadened := 0
+	for _, d := range diffs {
+		for _, f := range d.Findings {
+			if f.Kind != "permissions.broadened" || f.After != "read" || f.Significance != semdiff.Normal {
+				t.Errorf("%s: unexpected finding %+v", d.Path, f)
+			}
+			broadened++
+		}
+	}
+	if broadened != 4 {
+		t.Errorf("broadened findings = %d, want 4", broadened)
+	}
+	if Publishable(diffs) {
+		t.Error("read-only broadening is publishable")
+	}
+	writeDiff := compareYAML(t, ".github/workflows/build-binaries.yml", workflowBefore, strings.Replace(workflowBefore, "permissions: {}\n", "permissions:\n  contents: write\n", 1))
+	if len(writeDiff.Findings) != 1 || writeDiff.Findings[0].Significance != semdiff.High {
+		t.Errorf("write broadening = %+v", writeDiff.Findings)
+	}
+	if !Publishable([]*semdiff.FileDiff{writeDiff}) {
+		t.Error("write broadening is not publishable")
 	}
 }

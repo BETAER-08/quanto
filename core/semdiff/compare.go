@@ -3,6 +3,7 @@ package semdiff
 import (
 	"sort"
 
+	"github.com/BETAER-08/quanto/core/model"
 	"github.com/BETAER-08/quanto/core/source"
 )
 
@@ -16,7 +17,11 @@ type comparer struct {
 }
 
 func (c *comparer) emit(f Finding) {
-	c.emitSig(f, defaultSignificance(f.Kind))
+	sig := defaultSignificance(f.Kind)
+	if f.Kind == kindPermissionsBroadened && f.After != levelName(model.LevelWrite) {
+		sig = Normal
+	}
+	c.emitSig(f, sig)
 }
 
 func (c *comparer) emitSig(f Finding, sig Significance) {

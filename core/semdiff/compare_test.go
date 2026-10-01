@@ -231,7 +231,7 @@ func TestPermissionScopes(t *testing.T) {
 	after := "on: push\npermissions: {contents: write, custom-scope: read}\njobs:\n  a:\n    runs-on: x\n    steps: [{run: a}]\n"
 	d := diff(t, before, after)
 	broad := findingsOf(d, kindPermissionsBroadened)
-	if len(broad) != 2 || broad[0].Subject != "job `a`" || broad[0].Detail != "custom-scope" || broad[0].Before != "none" || broad[0].After != "read" || broad[1].Subject != "workflow" || broad[1].Detail != "contents" || broad[1].Before != "read" || broad[1].After != "write" {
+	if len(broad) != 2 || broad[1].Subject != "job `a`" || broad[1].Detail != "custom-scope" || broad[1].Before != "none" || broad[1].After != "read" || broad[1].Significance != Normal || broad[0].Subject != "workflow" || broad[0].Detail != "contents" || broad[0].Before != "read" || broad[0].After != "write" || broad[0].Significance != High {
 		t.Errorf("broadened = %+v", broad)
 	}
 	if n := len(findingsOf(d, kindPermissionsNarrowed)); n != 14 {
