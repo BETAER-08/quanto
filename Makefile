@@ -1,6 +1,7 @@
 FUZZTIME ?= 20s
+VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: fmt-check vet comments test test-race fuzz corpus check
+.PHONY: fmt-check vet comments test test-race fuzz corpus build check
 
 fmt-check:
 	@test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
@@ -25,5 +26,8 @@ fuzz:
 
 corpus:
 	./scripts/fetch-corpus.sh
+
+build:
+	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/quanto ./cmd/quanto
 
 check: fmt-check vet comments test-race
