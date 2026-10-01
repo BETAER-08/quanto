@@ -780,6 +780,12 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 
 `Pos`는 after 문서의 해당 노드 위치다. after에 없는 대상(제거된 것)은 영값이고 `BasePos`에 before 위치를 넣는다.
 
+### 9.7.1 알려진 한계 (의도적으로 다루지 않음)
+
+- 잡 `if`를 평가하지 않는다. 실행되지 않을 잡도 `JobsPerRun`과 최대 동시 잡 수(`Width`)에 포함된다.
+- 매트릭스는 조합 수만 비교한다. 축 값을 교체해 실제 커버리지가 줄어도 조합 수가 같으면 Finding이 없다.
+- `with:` 입력을 통한 도구 버전 고정 해제(`setup-*` 액션의 `*-version` 값을 정확한 버전에서 `stable`, `latest`, 범위로 바꾸는 것)는 탐지하지 않는다. 액션 ref만 비교한다.
+
 ### 9.8 필수 골든 테스트
 
 `testdata/golden/semdiff/<case>/` 아래 `before.yml`, `after.yml`, `expected.json`을 둔다. 파일이 없는 쪽은 `before.yml`이나 `after.yml`을 두지 않는다. 최소 케이스는 다음과 같다.
@@ -1246,7 +1252,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 - `quanto manifest`: GitHub App manifest JSON을 출력한다. `default_permissions`: `contents: read`, `checks: write`, `pull_requests: write`, `actions: read`, `metadata: read`. `default_events`: `pull_request`, `workflow_run`. `public: true`. `hook_attributes.url`과 `url`은 플래그 값이다. URL 형식을 검증한다.
 - `docs/github-app.md`: manifest 흐름으로 App을 만드는 절차, 개인키 다운로드, 설치 방법.
 - `docs/deploy.md`: Podman secret 생성 명령, Quadlet 파일 배치 경로(`~/.config/containers/systemd/`), `systemctl --user daemon-reload`와 시작, 리버스 프록시로 TLS를 종단해야 한다는 요구, 로컬 개발 시 웹훅 전달 방법.
-- `README.md`: 한 문단 소개, 실제 형식의 예시 코멘트, 요구 권한 표와 각 권한의 용도, 보안 정책(코드 미실행, 원문 미저장), CLI 사용법, 자체 호스팅 링크, 알려진 한계(정적 분석이 잡지 못하는 것, 추정의 전제, 잡 `name`에 표현식을 쓰거나 괄호 접미사가 겹치는 잡은 이력과 매칭되지 않아 추정이 생략된다는 점, 재사용 워크플로 내부는 보지 않는다는 점), 라이선스.
+- `README.md`: 한 문단 소개, 실제 형식의 예시 코멘트, 요구 권한 표와 각 권한의 용도, 보안 정책(코드 미실행, 원문 미저장), CLI 사용법, 자체 호스팅 링크, 알려진 한계(정적 분석이 잡지 못하는 것, 추정의 전제, 잡 `name`에 표현식을 쓰거나 괄호 접미사가 겹치는 잡은 이력과 매칭되지 않아 추정이 생략된다는 점, 재사용 워크플로 내부는 보지 않는다는 점, 잡 `if`를 평가하지 않으므로 실행되지 않을 잡도 최대 동시 잡 수에 포함된다는 점, 매트릭스 값을 교체해 커버리지가 줄어도 조합 수가 같으면 보고되지 않는다는 점, `with:` 입력을 통한 도구 버전 고정 해제(예: `go-version: '1.22.3'` → `stable`)는 탐지하지 않는다는 점), 라이선스.
 
 ---
 

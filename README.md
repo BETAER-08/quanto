@@ -85,6 +85,10 @@ Exit codes: `0` success, `1` execution error (for example an unreadable input fi
 ## Known limitations
 
 - Static analysis only sees the workflow files. Values computed at runtime are not resolved: a matrix built with `fromJSON(...)` or another expression is reported as unknown (`?`), `if:` conditions are not evaluated, and jobs that would be skipped are still counted.
+- `if:` conditions on jobs are not evaluated, so a job that would not run still counts toward jobs per run and toward the maximum number of concurrent jobs.
+- Matrices are compared by the number of combinations only. Replacing axis values so that fewer distinct platforms or versions are covered is not reported when the number of combinations stays the same.
+- Unpinning a tool version through action inputs (for example `go-version: '1.22.3'` changed to `stable` in `with:`) is not detected; only the action reference itself is compared.
+- Permissions are compared as effective permissions: a job without its own `permissions` block uses the workflow's block, and a workflow without one uses the repository default, which is not visible to static analysis. A change to the repository default is therefore not reported, and a job whose effective permissions come from the repository default is compared only when a `permissions` block is added or removed.
 - Reusable workflows are not opened. A job that calls a reusable workflow counts as one job per matrix instance, and changes inside the called workflow are not reported.
 - Composite actions and the contents of referenced actions are not inspected. Only the `uses:` reference and its ref are compared.
 - A tag and a branch cannot be told apart statically; every ref that is not a 40-character commit SHA is treated as mutable.
