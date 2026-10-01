@@ -15,6 +15,10 @@ import (
 	"github.com/BETAER-08/quanto/core/report"
 )
 
+const MaxFileSize = 1 << 20
+
+var ErrFileTooLarge = errors.New("file exceeds 1 MiB")
+
 const (
 	maxPullRequestFiles = 3000
 	annotationBatch     = 50
@@ -143,9 +147,12 @@ func (c *Client) FileContent(ctx context.Context, owner, repo, path, ref string)
 		return nil, false, err
 	}
 	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
+	data, err := io.ReadAll(io.LimitReader(resp.Body, MaxFileSize+1))
 	if err != nil {
 		return nil, false, fmt.Errorf("github: read file content: %w", err)
+	}
+	if len(data) > MaxFileSize {
+		return nil, true, ErrFileTooLarge
 	}
 	return data, true, nil
 }

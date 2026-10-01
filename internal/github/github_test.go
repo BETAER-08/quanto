@@ -587,6 +587,44 @@ func TestFileContentEscaping(t *testing.T) {
 	}
 }
 
+func TestFileContentSizeLimit(t *testing.T) {
+	tests := []struct {
+		name string
+		size int
+		ok   bool
+	}{
+		{"exactly 1 MiB", MaxFileSize, true},
+		{"one byte over", MaxFileSize + 1, false},
+		{"far over", 16 * MaxFileSize, false},
+	}
+	for _, tt := range tests {
+		f := newFake(t)
+		f.handle("GET /repos/octo/hello/contents/.github/workflows/big.yml", func(w http.ResponseWriter, r *http.Request) {
+			chunk := []byte(strings.Repeat("a", 64<<10))
+			for left := tt.size; left > 0; {
+				n := min(left, len(chunk))
+				if _, err := w.Write(chunk[:n]); err != nil {
+					return
+				}
+				left -= n
+			}
+		})
+		data, ok, err := f.client(t).FileContent(context.Background(), testOwner, testRepo, ".github/workflows/big.yml", "abc")
+		if tt.ok {
+			if err != nil || !ok || len(data) != tt.size {
+				t.Errorf("%s: FileContent = %d bytes, %v, %v", tt.name, len(data), ok, err)
+			}
+			continue
+		}
+		if !errors.Is(err, ErrFileTooLarge) || data != nil {
+			t.Errorf("%s: FileContent = %d bytes, %v, %v", tt.name, len(data), ok, err)
+		}
+		if err != nil && err.Error() != "file exceeds 1 MiB" {
+			t.Errorf("%s: error = %q", tt.name, err)
+		}
+	}
+}
+
 func TestFileContentNotFound(t *testing.T) {
 	f := newFake(t)
 	data, ok, err := f.client(t).FileContent(context.Background(), testOwner, testRepo, ".github/workflows/gone.yml", "abc")

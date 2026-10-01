@@ -18,12 +18,7 @@ import (
 	"github.com/BETAER-08/quanto/internal/store"
 )
 
-const (
-	workflowDir     = ".github/workflows/"
-	maxWorkflowSize = 1 << 20
-)
-
-var errTooLarge = errors.New("file exceeds 1 MiB")
+const workflowDir = ".github/workflows/"
 
 func isWorkflowPath(p string) bool {
 	name, ok := strings.CutPrefix(p, workflowDir)
@@ -197,14 +192,14 @@ func (a *App) analyzePR(ctx context.Context, raw []byte) error {
 
 func (a *App) loadWorkflow(ctx context.Context, client *github.Client, p AnalyzePayload, path, ref string) (*model.Workflow, error, error) {
 	content, found, err := client.FileContent(ctx, p.Owner, p.Repo, path, ref)
+	if errors.Is(err, github.ErrFileTooLarge) {
+		return nil, github.ErrFileTooLarge, nil
+	}
 	if err != nil {
 		return nil, nil, err
 	}
 	if !found || len(content) == 0 {
 		return nil, nil, nil
-	}
-	if len(content) > maxWorkflowSize {
-		return nil, errTooLarge, nil
 	}
 	doc, err := source.Load(path, content)
 	if err != nil {

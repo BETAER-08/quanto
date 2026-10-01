@@ -953,7 +953,7 @@ func (c *Client) RunJobs(ctx, owner, repo string, runID int64) ([]RunJob, error)
 ```
 
 - `PullRequestFiles`는 최대 3000개까지 읽는다. `PullRequestFile{Filename, PreviousFilename, Status}`.
-- `FileContent`는 `GET /repos/{o}/{r}/contents/{path}?ref={ref}`에 `Accept: application/vnd.github.raw+json`을 쓴다. 404면 `(nil, false, nil)`이다. 경로 세그먼트는 URL 이스케이프한다.
+- `FileContent`는 `GET /repos/{o}/{r}/contents/{path}?ref={ref}`에 `Accept: application/vnd.github.raw+json`을 쓴다. 404면 `(nil, false, nil)`이다. 경로 세그먼트는 URL 이스케이프한다. 본문은 `io.LimitReader(body, 1<<20+1)`로 읽는다. 1 MiB(`MaxFileSize = 1 << 20`)를 넘으면 `(nil, true, ErrFileTooLarge)`를 반환한다. `ErrFileTooLarge`의 메시지는 `file exceeds 1 MiB`다. 전체 본문을 메모리에 읽은 뒤 크기를 검사하지 않는다.
 - Check Run 어노테이션은 요청당 최대 50개다. 첫 요청에 50개를 담아 생성하고, 나머지는 `UpdateCheckRun`으로 50개씩 추가한다. `status: completed`, `conclusion: neutral`, `name: quanto`.
 - `CheckRun{HeadSHA, Title, Summary, Annotations []report.Annotation}`. `internal/github`는 `core/report`를 import해도 된다(반대 방향은 금지).
 - `WorkflowRuns`는 `status=completed`로 최신순 한 페이지만 읽는다.
@@ -1150,7 +1150,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 4. 경로 사전순으로 정렬하고 `QUANTO_MAX_WORKFLOW_FILES`까지만 분석한다. 나머지 개수는 `Meta.SkippedFiles`다.
 5. 파일마다:
    - `added` → before 없음. `removed` → after 없음. `renamed` → before는 `PreviousFilename`, `OldPath`를 설정.
-   - `FileContent`로 base는 `base_sha`, head는 `head_sha`에서 읽는다. 1 MiB를 넘으면 해당 쪽 에러는 `file exceeds 1 MiB`다.
+   - `FileContent`로 base는 `base_sha`, head는 `head_sha`에서 읽는다. `github.ErrFileTooLarge`면 해당 쪽 에러는 `ErrFileTooLarge`(`file exceeds 1 MiB`)다.
    - `source.Load` → `model.Parse`. 에러는 Input의 `BeforeErr`, `AfterErr`로 넘긴다.
 6. `store.Durations(repository_id)`로 DurationSource를 만든다.
 7. 파일별 `semdiff.Compare`.
