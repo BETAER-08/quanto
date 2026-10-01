@@ -22,8 +22,9 @@ var ErrFileTooLarge = errors.New("file exceeds 1 MiB")
 const (
 	maxPullRequestFiles = 3000
 	annotationBatch     = 50
-	checkRunName        = "quanto"
 )
+
+const CheckRunName = "quanto"
 
 type GitRef struct {
 	SHA string `json:"sha"`
@@ -192,7 +193,7 @@ func (c *Client) CreateCheckRun(ctx context.Context, owner, repo string, run Che
 	}
 	chunks := batches(toCheckAnnotations(run.Annotations))
 	body := checkRunBody{
-		Name:       checkRunName,
+		Name:       CheckRunName,
 		HeadSHA:    run.HeadSHA,
 		Status:     "completed",
 		Conclusion: "neutral",
@@ -213,8 +214,64 @@ func (c *Client) CreateCheckRun(ctx context.Context, owner, repo string, run Che
 	return created.ID, nil
 }
 
+type existingCheckRun struct {
+	ID  int64 `json:"id"`
+	App struct {
+		ID int64 `json:"id"`
+	} `json:"app"`
+	Output struct {
+		AnnotationsCount int `json:"annotations_count"`
+	} `json:"output"`
+}
+
+func (c *Client) FindCheckRun(ctx context.Context, owner, repo, headSHA, name string) (int64, bool, error) {
+	auth, err := c.auth(ctx)
+	if err != nil {
+		return 0, false, err
+	}
+	query := url.Values{"check_name": {name}, "per_page": {strconv.Itoa(perPage)}}
+	endpoint := c.t.endpoint(query, repoSegments(owner, repo, "commits", headSHA, "check-runs")...)
+	runs, err := paginate(ctx, c.t, endpoint, auth, 0, func(resp *http.Response) ([]existingCheckRun, error) {
+		var payload struct {
+			CheckRuns []existingCheckRun `json:"check_runs"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+			return nil, err
+		}
+		return payload.CheckRuns, nil
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("github: find check run: %w", err)
+	}
+	for _, r := range runs {
+		if r.App.ID == c.app.appID && r.ID > 0 {
+			return r.ID, true, nil
+		}
+	}
+	return 0, false, nil
+}
+
+func (c *Client) checkRunAnnotations(ctx context.Context, owner, repo string, id int64) (int, error) {
+	auth, err := c.auth(ctx)
+	if err != nil {
+		return 0, err
+	}
+	var existing existingCheckRun
+	endpoint := c.t.endpoint(nil, repoSegments(owner, repo, "check-runs", strconv.FormatInt(id, 10))...)
+	if _, err := c.t.getJSON(ctx, endpoint, auth, &existing); err != nil {
+		return 0, fmt.Errorf("github: read check run: %w", err)
+	}
+	return existing.Output.AnnotationsCount, nil
+}
+
 func (c *Client) UpdateCheckRun(ctx context.Context, owner, repo string, id int64, run CheckRun) error {
-	for _, chunk := range batches(toCheckAnnotations(run.Annotations)) {
+	present, err := c.checkRunAnnotations(ctx, owner, repo, id)
+	if err != nil {
+		return err
+	}
+	all := toCheckAnnotations(run.Annotations)
+	present = min(max(present, 0), len(all))
+	for _, chunk := range batches(all[present:]) {
 		if err := c.patchCheckRun(ctx, owner, repo, id, run, chunk); err != nil {
 			return err
 		}

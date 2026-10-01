@@ -89,6 +89,36 @@ type fakeGitHub struct {
 	jobs     []map[string]any
 	limited  map[string]bool
 	broken   map[string]bool
+	checks   []*fakeCheckRun
+}
+
+type fakeCheckRun struct {
+	ID          int64
+	HeadSHA     string
+	AppID       int64
+	Annotations int
+}
+
+func (f *fakeGitHub) checkRunLocked(id string) *fakeCheckRun {
+	for _, c := range f.checks {
+		if strconv.FormatInt(c.ID, 10) == id {
+			return c
+		}
+	}
+	return nil
+}
+
+func decodeCheckBody(t *testing.T, r *http.Request) (string, int) {
+	var body struct {
+		HeadSHA string `json:"head_sha"`
+		Output  struct {
+			Annotations []json.RawMessage `json:"annotations"`
+		} `json:"output"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		t.Errorf("decode check run: %v", err)
+	}
+	return body.HeadSHA, len(body.Output.Annotations)
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -129,10 +159,49 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		}
 	})
 	mux.HandleFunc("POST /repos/{o}/{r}/check-runs", func(w http.ResponseWriter, r *http.Request) {
-		f.json(w, http.StatusCreated, map[string]any{"id": 900})
+		head, n := decodeCheckBody(t, r)
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		c := &fakeCheckRun{ID: int64(900 + len(f.checks)), HeadSHA: head, AppID: 1, Annotations: n}
+		f.checks = append(f.checks, c)
+		f.jsonLocked(w, http.StatusCreated, map[string]any{"id": c.ID})
 	})
 	mux.HandleFunc("PATCH /repos/{o}/{r}/check-runs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		f.json(w, http.StatusOK, map[string]any{"id": 900})
+		_, n := decodeCheckBody(t, r)
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		c := f.checkRunLocked(r.PathValue("id"))
+		if c == nil {
+			f.jsonLocked(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
+			return
+		}
+		c.Annotations += n
+		f.jsonLocked(w, http.StatusOK, map[string]any{"id": c.ID})
+	})
+	mux.HandleFunc("GET /repos/{o}/{r}/check-runs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		c := f.checkRunLocked(r.PathValue("id"))
+		if c == nil {
+			f.jsonLocked(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
+			return
+		}
+		f.jsonLocked(w, http.StatusOK, map[string]any{"id": c.ID, "app": map[string]any{"id": c.AppID}, "output": map[string]any{"annotations_count": c.Annotations}})
+	})
+	mux.HandleFunc("GET /repos/{o}/{r}/commits/{ref}/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("check_name") != "quanto" {
+			t.Errorf("check_name = %q", r.URL.Query().Get("check_name"))
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		runs := []map[string]any{}
+		for i := len(f.checks) - 1; i >= 0; i-- {
+			c := f.checks[i]
+			if c.HeadSHA == r.PathValue("ref") {
+				runs = append(runs, map[string]any{"id": c.ID, "app": map[string]any{"id": c.AppID}, "output": map[string]any{"annotations_count": c.Annotations}})
+			}
+		}
+		f.jsonLocked(w, http.StatusOK, map[string]any{"total_count": len(runs), "check_runs": runs})
 	})
 	mux.HandleFunc("GET /repos/{o}/{r}/issues/{n}/comments", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()

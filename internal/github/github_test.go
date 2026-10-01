@@ -877,20 +877,84 @@ func TestCheckRunWithoutAnnotations(t *testing.T) {
 }
 
 func TestUpdateCheckRunBatches(t *testing.T) {
+	tests := []struct {
+		name    string
+		present int
+		sizes   string
+		first   string
+	}{
+		{"fresh", 0, "[50 1]", "m0"},
+		{"resume after first batch", 50, "[1]", "m50"},
+		{"resume mid batch", 20, "[31]", "m20"},
+		{"complete", 51, "[0]", ""},
+		{"more than expected", 70, "[0]", ""},
+	}
+	for _, tt := range tests {
+		f := newFake(t)
+		f.handle("GET /repos/octo/hello/check-runs/7", func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(t, w, http.StatusOK, map[string]any{"id": 7, "app": map[string]any{"id": testAppID}, "output": map[string]any{"annotations_count": tt.present}})
+		})
+		f.handle("PATCH /repos/octo/hello/check-runs/7", func(w http.ResponseWriter, r *http.Request) {
+			writeJSON(t, w, http.StatusOK, map[string]any{"id": 7})
+		})
+		run := CheckRun{Title: "t", Summary: "s", Annotations: makeAnnotations(51)}
+		if err := f.client(t).UpdateCheckRun(context.Background(), testOwner, testRepo, 7, run); err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		var sizes []int
+		first := ""
+		for i, u := range f.recorded("PATCH", "/repos/octo/hello/check-runs/7") {
+			body := decodeCheckRun(t, u.Body)
+			if body.Output.Title != "t" || body.Output.Summary != "s" || body.Conclusion != "neutral" || body.Status != "completed" {
+				t.Errorf("%s: update body = %+v", tt.name, body)
+			}
+			sizes = append(sizes, len(body.Output.Annotations))
+			if i == 0 && len(body.Output.Annotations) > 0 {
+				first, _ = body.Output.Annotations[0]["message"].(string)
+			}
+		}
+		if fmt.Sprint(sizes) != tt.sizes || first != tt.first {
+			t.Errorf("%s: sizes = %v first = %q, want %s %q", tt.name, sizes, first, tt.sizes, tt.first)
+		}
+	}
+}
+
+func TestFindCheckRun(t *testing.T) {
 	f := newFake(t)
-	f.handle("PATCH /repos/octo/hello/check-runs/7", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(t, w, http.StatusOK, map[string]any{"id": 7})
+	f.handle("GET /repos/octo/hello/commits/abc123/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("check_name") != "quanto" || q.Get("per_page") != "100" {
+			t.Errorf("query = %v", q)
+		}
+		if q.Get("page") == "2" {
+			writeJSON(t, w, http.StatusOK, map[string]any{"total_count": 3, "check_runs": []map[string]any{
+				{"id": 31, "app": map[string]any{"id": testAppID}},
+				{"id": 32, "app": map[string]any{"id": testAppID}},
+			}})
+			return
+		}
+		w.Header().Set("Link", "<"+f.server.URL+"/repos/octo/hello/commits/abc123/check-runs?check_name=quanto&per_page=100&page=2>; rel=\"next\"")
+		writeJSON(t, w, http.StatusOK, map[string]any{"total_count": 3, "check_runs": []map[string]any{
+			{"id": 30, "app": map[string]any{"id": 9999}},
+		}})
 	})
-	run := CheckRun{Title: "t", Summary: "s", Annotations: makeAnnotations(51)}
-	if err := f.client(t).UpdateCheckRun(context.Background(), testOwner, testRepo, 7, run); err != nil {
-		t.Fatal(err)
+	id, ok, err := f.client(t).FindCheckRun(context.Background(), testOwner, testRepo, "abc123", CheckRunName)
+	if err != nil || !ok || id != 31 {
+		t.Fatalf("FindCheckRun = %d, %v, %v", id, ok, err)
 	}
-	updates := f.recorded("PATCH", "/repos/octo/hello/check-runs/7")
-	if len(updates) != 2 {
-		t.Fatalf("updates = %d", len(updates))
+	f.handle("GET /repos/octo/hello/commits/none/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusOK, map[string]any{"total_count": 1, "check_runs": []map[string]any{{"id": 40, "app": map[string]any{"id": 9999}}}})
+	})
+	id, ok, err = f.client(t).FindCheckRun(context.Background(), testOwner, testRepo, "none", CheckRunName)
+	if err != nil || ok || id != 0 {
+		t.Fatalf("FindCheckRun(other app) = %d, %v, %v", id, ok, err)
 	}
-	if n := len(decodeCheckRun(t, updates[1].Body).Output.Annotations); n != 1 {
-		t.Errorf("second batch = %d", n)
+	f.handle("GET /repos/octo/hello/commits/bad/check-runs", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusInternalServerError, map[string]any{"message": "boom"})
+	})
+	var apiErr *APIError
+	if _, _, err := f.client(t).FindCheckRun(context.Background(), testOwner, testRepo, "bad", CheckRunName); !errors.As(err, &apiErr) {
+		t.Fatalf("FindCheckRun error = %v", err)
 	}
 }
 

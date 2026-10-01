@@ -136,7 +136,7 @@ func (a *App) analyzePR(ctx context.Context, raw []byte) error {
 		diffs = append(diffs, semdiff.Compare(in, semdiff.Options{Durations: durations}))
 	}
 	title, summary := report.CheckSummary(diffs, meta)
-	checkRunID, err := client.CreateCheckRun(ctx, p.Owner, p.Repo, github.CheckRun{
+	checkRunID, err := a.publishCheckRun(ctx, client, p, github.CheckRun{
 		HeadSHA:     p.HeadSHA,
 		Title:       title,
 		Summary:     summary,
@@ -188,6 +188,17 @@ func (a *App) analyzePR(ctx context.Context, raw []byte) error {
 		}
 	}
 	return nil
+}
+
+func (a *App) publishCheckRun(ctx context.Context, client *github.Client, p AnalyzePayload, run github.CheckRun) (int64, error) {
+	id, found, err := client.FindCheckRun(ctx, p.Owner, p.Repo, p.HeadSHA, github.CheckRunName)
+	if err != nil {
+		return 0, err
+	}
+	if found {
+		return id, client.UpdateCheckRun(ctx, p.Owner, p.Repo, id, run)
+	}
+	return client.CreateCheckRun(ctx, p.Owner, p.Repo, run)
 }
 
 func (a *App) loadWorkflow(ctx context.Context, client *github.Client, p AnalyzePayload, path, ref string) (*model.Workflow, error, error) {

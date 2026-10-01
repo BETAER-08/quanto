@@ -945,6 +945,7 @@ func (c *Client) PullRequestFiles(ctx, owner, repo string, number int) ([]PullRe
 func (c *Client) FileContent(ctx, owner, repo, path, ref string) ([]byte, bool, error)
 func (c *Client) CreateCheckRun(ctx, owner, repo string, run CheckRun) (int64, error)
 func (c *Client) UpdateCheckRun(ctx, owner, repo string, id int64, run CheckRun) error
+func (c *Client) FindCheckRun(ctx, owner, repo, headSHA, name string) (int64, bool, error)
 func (c *Client) IssueComments(ctx, owner, repo string, number int) ([]IssueComment, error)
 func (c *Client) CreateIssueComment(ctx, owner, repo string, number int, body string) (int64, error)
 func (c *Client) UpdateIssueComment(ctx, owner, repo string, id int64, body string) error
@@ -954,7 +955,9 @@ func (c *Client) RunJobs(ctx, owner, repo string, runID int64) ([]RunJob, error)
 
 - `PullRequestFiles`는 최대 3000개까지 읽는다. `PullRequestFile{Filename, PreviousFilename, Status}`.
 - `FileContent`는 `GET /repos/{o}/{r}/contents/{path}?ref={ref}`에 `Accept: application/vnd.github.raw+json`을 쓴다. 404면 `(nil, false, nil)`이다. 경로 세그먼트는 URL 이스케이프한다. 본문은 `io.LimitReader(body, 1<<20+1)`로 읽는다. 1 MiB(`MaxFileSize = 1 << 20`)를 넘으면 `(nil, true, ErrFileTooLarge)`를 반환한다. `ErrFileTooLarge`의 메시지는 `file exceeds 1 MiB`다. 전체 본문을 메모리에 읽은 뒤 크기를 검사하지 않는다.
-- Check Run 어노테이션은 요청당 최대 50개다. 첫 요청에 50개를 담아 생성하고, 나머지는 `UpdateCheckRun`으로 50개씩 추가한다. `status: completed`, `conclusion: neutral`, `name: quanto`.
+- Check Run 어노테이션은 요청당 최대 50개다. `CreateCheckRun`은 첫 요청에 50개를 담아 생성하고, 나머지는 같은 Check Run에 `PATCH`로 50개씩 추가한다. 중간 배치가 실패하면 생성된 ID와 에러를 함께 반환한다. `status: completed`, `conclusion: neutral`, `name: quanto`(`CheckRunName`).
+- `FindCheckRun`은 `GET /repos/{o}/{r}/commits/{headSHA}/check-runs?check_name={name}&per_page=100`을 페이지네이션으로 읽고, `app.id`가 자기 App ID인 첫 Check Run의 ID를 반환한다. 없으면 `(0, false, nil)`이다.
+- `UpdateCheckRun`은 멱등 재개 방식이다. GitHub은 `PATCH`마다 어노테이션을 기존 목록에 덧붙이므로, 먼저 `GET /repos/{o}/{r}/check-runs/{id}`의 `output.annotations_count`(k)를 읽고 `Annotations[k:]`만 50개씩 `PATCH`한다(k는 `[0, len]`로 클램프). 보낼 어노테이션이 없어도 title과 summary를 갱신하는 `PATCH` 한 번을 보낸다. 같은 입력에 대해 어노테이션 순서가 결정적(10절)이라는 전제에 기대며, 재시도 사이에 입력이 바뀌면(예: 이력 통계 갱신) 이미 올라간 앞쪽 어노테이션은 고칠 수 없다.
 - `CheckRun{HeadSHA, Title, Summary, Annotations []report.Annotation}`. `internal/github`는 `core/report`를 import해도 된다(반대 방향은 금지).
 - `WorkflowRuns`는 `status=completed`로 최신순 한 페이지만 읽는다.
 - `RunJobs`는 `filter=latest`다. `RunJob{ID, Name, Conclusion, StartedAt, CompletedAt, Labels}`.
@@ -1154,7 +1157,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
    - `source.Load` → `model.Parse`. 에러는 Input의 `BeforeErr`, `AfterErr`로 넘긴다.
 6. `store.Durations(repository_id)`로 DurationSource를 만든다.
 7. 파일별 `semdiff.Compare`.
-8. Check Run: `CheckSummary`와 `Annotations`로 생성한다. Finding이 없어도 생성한다.
+8. Check Run: `CheckSummary`와 `Annotations`로 만든다. Finding이 없어도 만든다. 먼저 `FindCheckRun(head_sha, "quanto")`로 자기 App의 기존 Check Run을 찾고, 있으면 `UpdateCheckRun`, 없으면 `CreateCheckRun`이다. 재시도와 같은 head의 재분석이 Check Run을 중복 생성하지 않게 하기 위해서다.
 9. 코멘트 전에 `PullRequest`를 다시 읽는다. 현재 head SHA가 페이로드의 `head_sha`와 다르면 코멘트 단계를 건너뛴다.
 10. 코멘트 대상 ID는 `pr_comments` 캐시를 먼저 보고, 없으면 `IssueComments` 중 본문이 `CommentMarker`로 시작하고 작성자 login이 `{app slug}[bot]`인 것을 찾는다(App slug는 `App()` 결과를 프로세스 수명 동안 캐시).
     - `Publishable`이면 있으면 수정, 없으면 생성하고 캐시에 기록한다.
