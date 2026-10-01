@@ -292,3 +292,20 @@ func TestErrorsDoNotLeakSecrets(t *testing.T) {
 		}
 	}
 }
+
+func TestPoolSize(t *testing.T) {
+	tests := []struct {
+		concurrency int
+		want        int32
+	}{
+		{1, 5},
+		{DefaultWorkerConcurrency, 8},
+		{64, 68},
+	}
+	for _, tt := range tests {
+		cfg := Config{WorkerConcurrency: tt.concurrency}
+		if got := cfg.PoolSize(); got != tt.want {
+			t.Errorf("PoolSize(%d) = %d, want %d", tt.concurrency, got, tt.want)
+		}
+	}
+}

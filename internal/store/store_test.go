@@ -214,7 +214,7 @@ func TestRecomputeJobStats(t *testing.T) {
 }
 
 func TestOpenInvalidURL(t *testing.T) {
-	_, err := Open(context.Background(), "postgres://user:hunter2@[::1")
+	_, err := Open(context.Background(), "postgres://user:hunter2@[::1", 5)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -265,5 +265,18 @@ func TestPruneJobRuns(t *testing.T) {
 	var indexed bool
 	if err := s.pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'job_runs_completed_at' AND schemaname = current_schema())").Scan(&indexed); err != nil || !indexed {
 		t.Fatalf("completed_at index = %v, %v", indexed, err)
+	}
+}
+
+func TestOpenMaxConns(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+	sized, err := Open(ctx, dsn, 7)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	defer sized.Close()
+	if got := sized.pool.Config().MaxConns; got != 7 {
+		t.Fatalf("MaxConns = %d, want 7", got)
 	}
 }

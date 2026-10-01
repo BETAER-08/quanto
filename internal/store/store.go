@@ -12,10 +12,13 @@ type Store struct {
 	pool *pgxpool.Pool
 }
 
-func Open(ctx context.Context, dsn string) (*Store, error) {
+func Open(ctx context.Context, dsn string, maxConns int32) (*Store, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
 		return nil, errors.New("store: invalid database URL")
+	}
+	if maxConns > 0 {
+		cfg.MaxConns = maxConns
 	}
 	return OpenConfig(ctx, cfg)
 }

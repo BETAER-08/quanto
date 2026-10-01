@@ -39,6 +39,12 @@ const (
 
 const redacted = "[redacted]"
 
+const poolHeadroom = 4
+
+func (c Config) PoolSize() int32 {
+	return int32(c.WorkerConcurrency + poolHeadroom)
+}
+
 type Config struct {
 	DatabaseURL       string
 	ListenAddr        string

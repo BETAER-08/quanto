@@ -28,7 +28,7 @@ func ParseRole(s string) (Role, bool) {
 }
 
 func Serve(ctx context.Context, cfg *config.Config, role Role, version string, logger *slog.Logger) error {
-	st, err := store.Open(ctx, cfg.DatabaseURL)
+	st, err := store.Open(ctx, cfg.DatabaseURL, cfg.PoolSize())
 	if err != nil {
 		return err
 	}

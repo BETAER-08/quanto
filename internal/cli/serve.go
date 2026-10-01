@@ -68,7 +68,7 @@ func runMigrate(args []string, stdout, stderr io.Writer) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	st, err := store.Open(ctx, cfg.DatabaseURL)
+	st, err := store.Open(ctx, cfg.DatabaseURL, cfg.PoolSize())
 	if err != nil {
 		fmt.Fprintf(stderr, "quanto: %v\n", err)
 		return exitError

@@ -918,7 +918,7 @@ CLI 테스트는 `internal/cli`에서 `Run(args []string, stdout, stderr io.Writ
 | `QUANTO_MAX_WORKFLOW_FILES` | — | `50` | PR당 분석 파일 상한 (1~200) |
 | `QUANTO_LOG_LEVEL` | — | `info` | debug, info, warn, error |
 
-시작 시 전부 검증하고 실패하면 모든 오류를 모아 한 번에 보고한다. 시크릿 파일은 끝 개행을 제거해서 읽는다. `Config`의 `String()`이나 로그 출력에서 시크릿 값은 `[redacted]`로 표시한다.
+시작 시 전부 검증하고 실패하면 모든 오류를 모아 한 번에 보고한다. `Config.PoolSize() int32`는 `WorkerConcurrency + 4`를 반환한다(14절). 시크릿 파일은 끝 개행을 제거해서 읽는다. `Config`의 `String()`이나 로그 출력에서 시크릿 값은 `[redacted]`로 표시한다.
 
 ---
 
@@ -969,7 +969,7 @@ func (c *Client) RunJobs(ctx, owner, repo string, runID int64) ([]RunJob, error)
 
 ## 14. internal/store
 
-`pgxpool`을 쓴다. 마이그레이션은 `//go:embed migrations/*.sql`로 포함하고 파일명 순서대로 적용한다. 각 파일은 트랜잭션 하나로 적용하고, `schema_migrations(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`에 기록한다. 적용 전체를 `pg_advisory_lock(7310254)`로 감싸서 여러 인스턴스가 동시에 시작해도 안전하게 만든다. advisory lock은 세션 단위이므로 `pool.Acquire`로 얻은 **단일 연결** 위에서 잠금, 전 파일 적용, 해제를 모두 수행한다.
+`pgxpool`을 쓴다. `Open(ctx, dsn, maxConns int32)`은 `maxConns > 0`이면 `MaxConns`를 그 값으로 둔다. `serve`와 `migrate`는 `Config.PoolSize()` = `QUANTO_WORKER_CONCURRENCY + 4`를 넘긴다. pgxpool 기본값(`max(4, CPU 수)`)이면 워커 동시성이 그보다 클 때 워커가 연결을 기다리며 처리량이 떨어지기 때문이다. 여유분 4는 유지 작업(reap·prune·큐 깊이), web 핸들러, 마이그레이션 잠금 연결 몫이다. 마이그레이션은 `//go:embed migrations/*.sql`로 포함하고 파일명 순서대로 적용한다. 각 파일은 트랜잭션 하나로 적용하고, `schema_migrations(version TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())`에 기록한다. 적용 전체를 `pg_advisory_lock(7310254)`로 감싸서 여러 인스턴스가 동시에 시작해도 안전하게 만든다. advisory lock은 세션 단위이므로 `pool.Acquire`로 얻은 **단일 연결** 위에서 잠금, 전 파일 적용, 해제를 모두 수행한다.
 
 ### 14.1 스키마 (`0001_init.sql`)
 
