@@ -430,7 +430,6 @@ func (c *AppClient) installationToken(ctx context.Context, installationID int64)
 		if err != nil {
 			return "", err
 		}
-		c.PruneTokens()
 		return token, nil
 	}
 }

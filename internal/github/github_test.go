@@ -475,7 +475,7 @@ func cachedInstallations(c *AppClient) []int64 {
 	return ids
 }
 
-func TestTokenCacheEvictsExpiredOnRefresh(t *testing.T) {
+func TestTokenRefreshDoesNotPrune(t *testing.T) {
 	f := newFake(t)
 	f.handle("POST /app/installations/88/access_tokens", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(t, w, http.StatusCreated, map[string]any{"token": "other", "expires_at": f.clock.Now().Add(time.Hour).Format(time.RFC3339)})
@@ -501,6 +501,12 @@ func TestTokenCacheEvictsExpiredOnRefresh(t *testing.T) {
 	})
 	if _, err := app.installationToken(ctx, 99); err != nil {
 		t.Fatal(err)
+	}
+	if got := fmt.Sprint(cachedInstallations(app)); got != "[77 88 99]" {
+		t.Fatalf("refresh pruned the cache: %s", got)
+	}
+	if n := app.PruneTokens(); n != 1 {
+		t.Fatalf("pruned = %d, want expired entry only", n)
 	}
 	if got := fmt.Sprint(cachedInstallations(app)); got != "[88 99]" {
 		t.Fatalf("expired token kept: %s", got)

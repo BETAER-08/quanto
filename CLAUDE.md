@@ -934,7 +934,7 @@ CLI 테스트는 `internal/cli`에서 `Run(args []string, stdout, stderr io.Writ
 표준 라이브러리 `net/http`로 구현한다.
 
 - **App JWT (RS256).** 헤더는 `{"alg":"RS256","typ":"JWT"}`, 클레임은 `iat = now - 60s`, `exp = now + 540s`, `iss = App ID 문자열`이다. PEM은 PKCS#1과 PKCS#8 둘 다 받는다. base64url은 패딩 없이 쓴다.
-- **설치 토큰.** `POST /app/installations/{id}/access_tokens`. 설치 ID별로 메모리에 캐시하고, 만료 5분 전에 갱신한다. 같은 설치에 대한 동시 갱신은 하나로 합친다(설치 ID별 뮤텍스). 만료된 엔트리(토큰이 없거나 `expires_at`이 지난 것)는 토큰을 새로 받은 직후와 `PruneTokens()`(워커의 1시간 주기 작업) 호출 때 캐시에서 제거한다. 제거는 맵 잠금 아래에서 엔트리 뮤텍스를 `TryLock`으로만 잡아 사용 중인 엔트리를 건너뛰고, 제거된 엔트리에는 표시를 남겨 그 엔트리를 이미 잡은 호출이 새 엔트리로 다시 시도하게 한다(교착 없음).
+- **설치 토큰.** `POST /app/installations/{id}/access_tokens`. 설치 ID별로 메모리에 캐시하고, 만료 5분 전에 갱신한다. 같은 설치에 대한 동시 갱신은 하나로 합친다(설치 ID별 뮤텍스). 만료된 엔트리(토큰이 없거나 `expires_at`이 지난 것)는 `PruneTokens()`(워커의 1시간 주기 작업) 호출 때만 캐시에서 제거한다. 토큰 갱신 경로에서는 호출하지 않는다. 갱신마다 전역 잠금 아래에서 맵 전체를 순회하면 설치 수에 비례하는 지연이 모든 갱신에 붙기 때문이다. 제거는 맵 잠금 아래에서 엔트리 뮤텍스를 `TryLock`으로만 잡아 사용 중인 엔트리를 건너뛰고, 제거된 엔트리에는 표시를 남겨 그 엔트리를 이미 잡은 호출이 새 엔트리로 다시 시도하게 한다(교착 없음).
 - **공통 헤더.** `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: quanto/<version>`.
 - **타임아웃.** `http.Client.Timeout = 30s`이고 모든 호출에 context를 전달한다.
 - **페이지네이션.** `Link` 헤더의 `rel="next"`를 따라간다. `per_page=100`이다.
