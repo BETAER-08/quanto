@@ -458,3 +458,24 @@ func TestSortOrder(t *testing.T) {
 		t.Errorf("order = %v", got)
 	}
 }
+
+func TestWidthText(t *testing.T) {
+	tests := []struct {
+		name string
+		wf   string
+		want string
+	}{
+		{"static", "on: push\njobs:\n  a: {runs-on: x, strategy: {matrix: {v: [1, 2, 3]}}, steps: [{run: a}]}\n  b: {runs-on: x, steps: [{run: b}]}\n", "4"},
+		{"dynamic", "on: push\njobs:\n  a: {runs-on: x, strategy: {matrix: {v: '${{ fromJSON(x) }}'}}, steps: [{run: a}]}\n  b: {runs-on: x, needs: a, steps: [{run: b}]}\n", "?"},
+		{"lower bound", "on: push\njobs:\n  a:\n    runs-on: x\n    strategy: {matrix: {a: [1,2,3,4,5,6,7,8,9,10,11], b: [1,2,3,4,5,6,7,8,9,10], c: [1,2,3,4,5,6,7,8,9,10]}}\n    steps: [{run: a}]\n", "≥1100"},
+	}
+	for _, tt := range tests {
+		d := diff(t, "", tt.wf)
+		if d.After.Width != tt.want {
+			t.Errorf("%s: Width = %q, want %q", tt.name, d.After.Width, tt.want)
+		}
+		if d.Before.Width != "" {
+			t.Errorf("%s: absent Width = %q", tt.name, d.Before.Width)
+		}
+	}
+}

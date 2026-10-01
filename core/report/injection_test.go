@@ -29,8 +29,8 @@ func injectedDiff() *semdiff.FileDiff {
 		Path:    ".github/workflows/x`y<details>@org/admins.yml",
 		OldPath: ".github/workflows/old\n## Approved.yml",
 		Status:  semdiff.StatusRenamed,
-		Before:  semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: 1},
-		After:   semdiff.Metrics{JobsPerRun: "2", Depth: 1, Width: 2},
+		Before:  semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: "1"},
+		After:   semdiff.Metrics{JobsPerRun: "2", Depth: 1, Width: "2"},
 	}
 	n := len(injectionPayloads)
 	for i, kind := range semdiff.Kinds() {

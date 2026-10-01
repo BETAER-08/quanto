@@ -76,7 +76,7 @@ func TestCorpusIdentity(t *testing.T) {
 		if len(d.Findings) != 0 {
 			t.Errorf("%s: Compare(a, a) findings = %v", names[i], kindList(d))
 		}
-		t.Logf("%s: jobs=%s depth=%d width=%d", names[i], d.After.JobsPerRun, d.After.Depth, d.After.Width)
+		t.Logf("%s: jobs=%s depth=%d width=%s", names[i], d.After.JobsPerRun, d.After.Depth, d.After.Width)
 	}
 }
 

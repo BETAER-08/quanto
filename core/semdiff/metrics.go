@@ -73,7 +73,7 @@ func analyze(w *model.Workflow, path string, opts Options) *side {
 		weights[id] = info.weight()
 	}
 	s.metrics.Depth = s.graph.Depth()
-	s.metrics.Width = s.graph.Width(weights)
+	s.metrics.Width = s.boundText(s.graph.Width(weights))
 	s.metrics.JobsPerRun = s.jobsPerRun()
 	s.estimate(opts)
 	return s
@@ -98,22 +98,23 @@ func expandJob(j *model.Job) *jobInfo {
 }
 
 func (s *side) jobsPerRun() string {
+	total := 0
+	for _, id := range s.order {
+		total = addSat(total, s.jobs[id].count)
+	}
+	return s.boundText(total)
+}
+
+func (s *side) boundText(n int) string {
 	if s.unknown {
 		return "?"
 	}
-	total := 0
-	lower := false
 	for _, id := range s.order {
-		info := s.jobs[id]
-		if !info.materialized {
-			lower = true
+		if !s.jobs[id].materialized {
+			return "≥" + strconv.Itoa(n)
 		}
-		total = addSat(total, info.count)
 	}
-	if lower {
-		return "≥" + strconv.Itoa(total)
-	}
-	return strconv.Itoa(total)
+	return strconv.Itoa(n)
 }
 
 func addSat(a, b int) int {
@@ -235,8 +236,8 @@ func (c *comparer) graphChanges() {
 	if b.metrics.Width != a.metrics.Width {
 		c.emit(Finding{
 			Kind:   kindGraphWidthChanged,
-			Before: strconv.Itoa(b.metrics.Width),
-			After:  strconv.Itoa(a.metrics.Width),
+			Before: b.metrics.Width,
+			After:  a.metrics.Width,
 			Pos:    a.wf.JobsPos,
 		})
 	}

@@ -5,13 +5,13 @@
   "before": {
     "jobs_per_run": "256",
     "depth": 1,
-    "width": 256,
+    "width": "256",
     "runner_minutes": ""
   },
   "after": {
     "jobs_per_run": "272",
     "depth": 1,
-    "width": 272,
+    "width": "272",
     "runner_minutes": ""
   },
   "findings": [

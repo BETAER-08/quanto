@@ -639,7 +639,7 @@ type Finding struct {
 type Metrics struct {
     JobsPerRun     string
     Depth          int
-    Width          int
+    Width          string
     RunnerMinutes  string
 }
 
@@ -676,7 +676,8 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 ### 9.2 Metrics
 
 - `JobsPerRun`: 모든 잡의 매트릭스 인스턴스 수 합. 재사용 워크플로를 호출하는 잡(`uses`)은 호출 대상 내부를 볼 수 없으므로 자신의 매트릭스 인스턴스 수만큼 센다(매트릭스 없으면 1). 동적 매트릭스가 하나라도 있으면 `"?"`, 비실체화 상한이면 `"≥N"`. 그 외 10진 정수.
-- `Depth`, `Width`: graph에서 계산한다. Width 가중치는 인스턴스 수이고, 동적은 1로 센다.
+- `Depth`: graph에서 계산한다.
+- `Width`: graph에서 계산한 최대 동시 잡 수를 `JobsPerRun`과 같은 규칙의 문자열로 쓴다. 가중치는 인스턴스 수다. 어느 잡이든 동적 매트릭스(또는 해석할 수 없는 매트릭스)가 있으면 `"?"`, 비실체화 상한 매트릭스가 있으면 `"≥N"`, 그 외 10진 정수다. 파일이 부재한 쪽은 빈 문자열이다. report 표에는 이 문자열을 그대로 쓴다(10절 숫자 필드 규칙).
 - `RunnerMinutes`: 추정이 가능할 때만 `"%.0f"`, 아니면 빈 문자열.
 
 ### 9.3 추정

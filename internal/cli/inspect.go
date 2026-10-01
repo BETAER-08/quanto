@@ -60,7 +60,7 @@ type inspectReport struct {
 	Permissions []inspectPermission `json:"permissions"`
 	JobsPerRun  string              `json:"jobs_per_run"`
 	Depth       int                 `json:"depth"`
-	Width       int                 `json:"width"`
+	Width       string              `json:"width"`
 	Jobs        []inspectJob        `json:"jobs"`
 	Actions     []inspectAction     `json:"actions"`
 	Diagnostics []inspectDiagnostic `json:"diagnostics"`
@@ -368,7 +368,7 @@ func renderInspect(rep inspectReport) string {
 	}
 	b.WriteString("Jobs per run: " + rep.JobsPerRun + "\n")
 	b.WriteString("Longest needs chain: " + strconv.Itoa(rep.Depth) + "\n")
-	b.WriteString("Max concurrent jobs: " + strconv.Itoa(rep.Width) + "\n")
+	b.WriteString("Max concurrent jobs: " + rep.Width + "\n")
 	b.WriteString("Jobs:\n")
 	if len(rep.Jobs) == 0 {
 		b.WriteString("  (none)\n")

@@ -78,7 +78,7 @@ type Finding struct {
 type Metrics struct {
 	JobsPerRun    string `json:"jobs_per_run"`
 	Depth         int    `json:"depth"`
-	Width         int    `json:"width"`
+	Width         string `json:"width"`
 	RunnerMinutes string `json:"runner_minutes"`
 }
 

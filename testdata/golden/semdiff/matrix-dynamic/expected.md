@@ -9,7 +9,7 @@ Execution changes in 1 workflow file.
 |---|---:|---:|
 | Jobs per run | 4 | ? |
 | Longest `needs` chain | 2 | 2 |
-| Max concurrent jobs | 3 | 1 |
+| Max concurrent jobs | 3 | ? |
 
 - Job `test` matrix is computed at runtime; job count unknown
 

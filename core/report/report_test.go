@@ -39,8 +39,8 @@ func specDiff() *semdiff.FileDiff {
 	return &semdiff.FileDiff{
 		Path:   ".github/workflows/ci.yml",
 		Status: semdiff.StatusModified,
-		Before: semdiff.Metrics{JobsPerRun: "7", Depth: 3, Width: 2, RunnerMinutes: "43"},
-		After:  semdiff.Metrics{JobsPerRun: "25", Depth: 3, Width: 4, RunnerMinutes: "172"},
+		Before: semdiff.Metrics{JobsPerRun: "7", Depth: 3, Width: "2", RunnerMinutes: "43"},
+		After:  semdiff.Metrics{JobsPerRun: "25", Depth: 3, Width: "4", RunnerMinutes: "172"},
 		Findings: []semdiff.Finding{
 			{Kind: "matrix.count_changed", Significance: semdiff.High, Subject: "test", Before: "6", After: "24", Pos: pos(13, 9, 15, 27)},
 			{Kind: "permissions.broadened", Significance: semdiff.High, Subject: "workflow", Before: "read", After: "write", Detail: "contents", Pos: pos(5, 13, 5, 17)},
@@ -151,14 +151,14 @@ func TestMarkdownMultipleFilesSortedAndPlural(t *testing.T) {
 	a := &semdiff.FileDiff{
 		Path:     ".github/workflows/a.yml",
 		Status:   semdiff.StatusAdded,
-		After:    semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: 1},
+		After:    semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: "1"},
 		Findings: []semdiff.Finding{{Kind: "workflow.added", Significance: semdiff.Normal}},
 	}
 	quiet := &semdiff.FileDiff{
 		Path:     ".github/workflows/c.yml",
 		Status:   semdiff.StatusModified,
-		Before:   semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: 1},
-		After:    semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: 1},
+		Before:   semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: "1"},
+		After:    semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: "1"},
 		Findings: []semdiff.Finding{{Kind: "action.added", Significance: semdiff.Low, Subject: "actions/cache", After: "v4"}},
 	}
 	got := Markdown([]*semdiff.FileDiff{b, quiet, a}, Meta{HeadSHA: "1234567", SkippedFiles: 3})
@@ -188,8 +188,8 @@ func TestMarkdownNoTableWhenMetricsEqual(t *testing.T) {
 	d := &semdiff.FileDiff{
 		Path:     ".github/workflows/ci.yml",
 		Status:   semdiff.StatusModified,
-		Before:   semdiff.Metrics{JobsPerRun: "2", Depth: 1, Width: 2, RunnerMinutes: "10"},
-		After:    semdiff.Metrics{JobsPerRun: "2", Depth: 1, Width: 2, RunnerMinutes: "10"},
+		Before:   semdiff.Metrics{JobsPerRun: "2", Depth: 1, Width: "2", RunnerMinutes: "10"},
+		After:    semdiff.Metrics{JobsPerRun: "2", Depth: 1, Width: "2", RunnerMinutes: "10"},
 		Findings: []semdiff.Finding{{Kind: "trigger.added", Significance: semdiff.Normal, Subject: "push"}},
 	}
 	got := Markdown([]*semdiff.FileDiff{d}, Meta{})
@@ -453,8 +453,8 @@ func TestTextStripsTerminalControls(t *testing.T) {
 	d := &semdiff.FileDiff{
 		Path:   ".github/workflows/\x1b[31mci\x1b]0;title\x07.yml",
 		Status: semdiff.StatusModified,
-		Before: semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: 1},
-		After:  semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: 1},
+		Before: semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: "1"},
+		After:  semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: "1"},
 		Findings: []semdiff.Finding{
 			{Kind: "job.added", Significance: semdiff.Normal, Subject: "safe\rEVIL"},
 		},
