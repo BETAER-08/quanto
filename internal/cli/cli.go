@@ -19,6 +19,8 @@ const usageText = `usage:
   quanto version
   quanto inspect <file> [--format text|json]
   quanto diff <before> <after> [--format text|markdown|json] [--path <name>]
+  quanto serve --role web|worker|all
+  quanto migrate
 `
 
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -33,6 +35,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runInspect(args[1:], stdout, stderr)
 	case "diff":
 		return runDiff(args[1:], stdout, stderr)
+	case "serve":
+		return runServe(args[1:], stdout, stderr)
+	case "migrate":
+		return runMigrate(args[1:], stdout, stderr)
 	}
 	fmt.Fprintf(stderr, "quanto: unknown command %q\n%s", args[0], usageText)
 	return exitUsage
