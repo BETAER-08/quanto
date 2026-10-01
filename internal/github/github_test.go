@@ -1336,3 +1336,110 @@ func TestBaseURLWithPathPrefix(t *testing.T) {
 		t.Errorf("hits = %d", hits.Load())
 	}
 }
+
+func TestTokenClient(t *testing.T) {
+	f := newFake(t)
+	f.handle("GET /repos/octo/hello/pulls/5", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusOK, map[string]any{"number": 5, "head": map[string]string{"sha": "h"}})
+	})
+	c, err := NewTokenClient(Options{BaseURL: f.server.URL, Version: testVersion}, "ghp_plaintokenvalue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pr, err := c.PullRequest(context.Background(), testOwner, testRepo, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pr.Head.SHA != "h" {
+		t.Errorf("pr = %+v", pr)
+	}
+	reqs := f.recorded("GET", "/repos/octo/hello/pulls/5")
+	if len(reqs) != 1 {
+		t.Fatalf("requests = %d", len(reqs))
+	}
+	h := reqs[0].Header
+	if h.Get("Authorization") != "Bearer ghp_plaintokenvalue" || h.Get("User-Agent") != "quanto/"+testVersion || h.Get("X-GitHub-Api-Version") != "2022-11-28" {
+		t.Errorf("headers = %v", h)
+	}
+	if f.tokenCalls.Load() != 0 {
+		t.Errorf("token endpoint called %d times", f.tokenCalls.Load())
+	}
+	if _, _, err := c.FindCheckRun(context.Background(), testOwner, testRepo, "h", CheckRunName); err == nil {
+		t.Error("FindCheckRun with token client succeeded")
+	}
+}
+
+func TestTokenClientValidation(t *testing.T) {
+	if _, err := NewTokenClient(Options{}, ""); err == nil {
+		t.Error("empty token accepted")
+	}
+	_, err := NewTokenClient(Options{BaseURL: "ftp://example.com"}, "ghp_secretvalue")
+	if err == nil {
+		t.Fatal("invalid base URL accepted")
+	}
+	if strings.Contains(err.Error(), "ghp_secretvalue") {
+		t.Errorf("error leaks token: %v", err)
+	}
+}
+
+func TestTokenClientErrorsDoNotLeakToken(t *testing.T) {
+	f := newFake(t)
+	f.handle("GET /repos/octo/hello/pulls/1", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusUnauthorized, map[string]string{"message": "Bad credentials"})
+	})
+	c, err := NewTokenClient(Options{BaseURL: f.server.URL}, "ghp_leakcheckvalue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.PullRequest(context.Background(), testOwner, testRepo, 1)
+	if err == nil || strings.Contains(err.Error(), "ghp_leakcheckvalue") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestWorkflowFileRuns(t *testing.T) {
+	f := newFake(t)
+	f.handle("GET /repos/octo/hello/actions/workflows/ci.yml/runs", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("status") != "success" || q.Get("per_page") != "10" {
+			t.Errorf("query = %v", q)
+		}
+		w.Header().Set("Link", fmt.Sprintf(`<%s/repos/octo/hello/actions/workflows/ci.yml/runs?page=2>; rel="next"`, f.server.URL))
+		runs := []map[string]any{}
+		for i := 0; i < 12; i++ {
+			runs = append(runs, map[string]any{"id": 100 - i, "path": ".github/workflows/ci.yml", "status": "completed", "conclusion": "success"})
+		}
+		writeJSON(t, w, http.StatusOK, map[string]any{"total_count": 12, "workflow_runs": runs})
+	})
+	c, err := NewTokenClient(Options{BaseURL: f.server.URL}, "ghp_x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs, err := c.WorkflowFileRuns(context.Background(), testOwner, testRepo, "ci.yml", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 10 || runs[0].ID != 100 || runs[9].ID != 91 {
+		t.Errorf("runs = %+v", runs)
+	}
+	if n := len(f.recorded("GET", "/repos/octo/hello/actions/workflows/ci.yml/runs")); n != 1 {
+		t.Errorf("requests = %d, want one page only", n)
+	}
+	if _, err := c.WorkflowFileRuns(context.Background(), testOwner, testRepo, "missing.yml", 10); err == nil {
+		t.Error("missing workflow returned no error")
+	} else {
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound {
+			t.Errorf("err = %v", err)
+		}
+	}
+	f.handle("GET /repos/octo/hello/actions/workflows/a%20b.yml/runs", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("per_page") != "1" {
+			t.Errorf("per_page = %q", r.URL.Query().Get("per_page"))
+		}
+		writeJSON(t, w, http.StatusOK, map[string]any{"workflow_runs": []map[string]any{}})
+	})
+	if _, err := c.WorkflowFileRuns(context.Background(), testOwner, testRepo, "a b.yml", 0); err != nil {
+		t.Errorf("escaped name: %v", err)
+	}
+}

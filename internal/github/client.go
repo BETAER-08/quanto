@@ -478,9 +478,24 @@ type Client struct {
 	t              *transport
 	app            *AppClient
 	installationID int64
+	token          string
+}
+
+func NewTokenClient(opts Options, token string) (*Client, error) {
+	if token == "" {
+		return nil, errors.New("github: token is required")
+	}
+	t, err := newTransport(opts)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{t: t, token: token}, nil
 }
 
 func (c *Client) auth(ctx context.Context) (string, error) {
+	if c.app == nil {
+		return "Bearer " + c.token, nil
+	}
 	token, err := c.app.installationToken(ctx, c.installationID)
 	if err != nil {
 		return "", err

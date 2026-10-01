@@ -245,6 +245,9 @@ type existingCheckRun struct {
 }
 
 func (c *Client) FindCheckRun(ctx context.Context, owner, repo, headSHA, name string) (int64, bool, error) {
+	if c.app == nil {
+		return 0, false, errors.New("github: find check run: requires an app client")
+	}
 	auth, err := c.auth(ctx)
 	if err != nil {
 		return 0, false, err
@@ -363,6 +366,26 @@ func (c *Client) WorkflowRuns(ctx context.Context, owner, repo string, limit int
 	}
 	query := url.Values{"status": {"completed"}, "per_page": {strconv.Itoa(limit)}}
 	endpoint := c.t.endpoint(query, repoSegments(owner, repo, "actions", "runs")...)
+	var payload struct {
+		WorkflowRuns []WorkflowRun `json:"workflow_runs"`
+	}
+	if _, err := c.t.getJSON(ctx, endpoint, auth, &payload); err != nil {
+		return nil, err
+	}
+	if len(payload.WorkflowRuns) > limit {
+		payload.WorkflowRuns = payload.WorkflowRuns[:limit]
+	}
+	return payload.WorkflowRuns, nil
+}
+
+func (c *Client) WorkflowFileRuns(ctx context.Context, owner, repo, workflowFile string, limit int) ([]WorkflowRun, error) {
+	auth, err := c.auth(ctx)
+	if err != nil {
+		return nil, err
+	}
+	limit = min(max(limit, 1), perPage)
+	query := url.Values{"status": {"success"}, "per_page": {strconv.Itoa(limit)}}
+	endpoint := c.t.endpoint(query, repoSegments(owner, repo, "actions", "workflows", workflowFile, "runs")...)
 	var payload struct {
 		WorkflowRuns []WorkflowRun `json:"workflow_runs"`
 	}
