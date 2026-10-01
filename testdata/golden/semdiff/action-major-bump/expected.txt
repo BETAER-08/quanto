@@ -1,2 +1,2 @@
-.github/workflows/ci.yml (modified)
+`.github/workflows/ci.yml` (modified)
   - [normal] `actions/checkout`: `v4` → `v5`

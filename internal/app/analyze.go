@@ -255,17 +255,9 @@ func isNotFound(err error) bool {
 	return errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
 }
 
-func noChangeBody(sha string) string {
-	short := sha
-	if len(short) > 7 {
-		short = short[:7]
-	}
-	return report.CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit `" + short + "`.\n"
-}
-
 func (a *App) publishComment(ctx context.Context, client *github.Client, p AnalyzePayload, diffs []*semdiff.FileDiff, meta report.Meta) error {
 	publishable := report.Publishable(diffs)
-	body := noChangeBody(p.HeadSHA)
+	body := report.NoChanges(p.HeadSHA)
 	if publishable {
 		body = report.Markdown(diffs, meta)
 	}

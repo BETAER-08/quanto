@@ -1,4 +1,4 @@
-.github/workflows/ci.yml (modified)
+`.github/workflows/ci.yml` (modified)
   Jobs per run: 7 → 25
   Max concurrent jobs: 7 → 25
   - [high] Job `test` matrix: 6 → 24 jobs

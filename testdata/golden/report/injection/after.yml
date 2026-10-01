@@ -1,0 +1,18 @@
+on:
+  push:
+    branches: ["x\n\n## Approved", "@org/admins", "<details>"]
+  schedule:
+    - cron: "<!-- quanto:summary -->"
+jobs:
+  build:
+    runs-on: "x\n\n## Approved by security team\n![](https://evil.example/p.png) @org/admins"
+    timeout-minutes: "```"
+    concurrency: "<details><summary>@org/admins</summary>"
+    steps:
+      - uses: "evil/act@v1`x` @someone"
+      - uses: "``evil/two@main"
+  "a`b":
+    runs-on: ""
+    needs: ["<!-- quanto:summary -->"]
+    steps:
+      - run: echo

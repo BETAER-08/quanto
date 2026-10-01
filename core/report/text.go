@@ -16,9 +16,9 @@ func Text(diffs []*semdiff.FileDiff) string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		b.WriteString(d.Path + " (" + string(d.Status))
+		b.WriteString(inline(d.Path) + " (" + string(d.Status))
 		if d.OldPath != "" && d.OldPath != d.Path {
-			b.WriteString(", from " + d.OldPath)
+			b.WriteString(", from " + inline(d.OldPath))
 		}
 		b.WriteString(")\n")
 		for _, r := range metricRows(d) {

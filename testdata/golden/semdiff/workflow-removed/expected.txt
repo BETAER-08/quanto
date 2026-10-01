@@ -1,4 +1,4 @@
-.github/workflows/ci.yml (removed)
+`.github/workflows/ci.yml` (removed)
   Jobs per run: 1 → —
   Longest `needs` chain: 1 → —
   Max concurrent jobs: 1 → —

@@ -1,0 +1,54 @@
+`.github/workflows/ci.yml` (modified)
+  Jobs per run: 1 → 2
+  Max concurrent jobs: 1 → 2
+  - [high] New third-party action: ``` ``evil/two@main ``` (mutable ref)
+  - [high] New third-party action: ``evil/act@v1`x` @someone`` (mutable ref)
+  - [normal] `push` `branches` filter: `main` → `<details>, @org/admins, x  ## Approved`
+  - [normal] Schedule: `(none)` → `'<!-- quanto:summary -->'`
+  - [normal] Job added: ``a`b``
+  - [normal] Job `build` runs-on: `ubuntu-latest` → `x  ## Approved by security team ![](https://evil.example/p.png) @org/admins`
+  - [normal] Max concurrent jobs: 1 → 2
+  - [normal] Job ``a`b`` needs unknown job `<!-- quanto:summary -->`
+  - [low] Job `build` timeout-minutes: `10` → ```` ``` ````
+  - [low] Job `build` concurrency: `(none)` → `<details><summary>@org/admins</summary>`
+
+``.github/workflows/x`y<details>@org/admins.yml`` (renamed, from `.github/workflows/old ## Approved.yml`)
+  Jobs per run: 1 → 2
+  Max concurrent jobs: 1 → 2
+  - [normal] Workflow added
+  - [normal] Workflow removed
+  - [normal] Workflow renamed from `@org/admins`
+  - [normal] Could not analyze: `<!-- quanto:summary -->`
+  - [normal] Trigger added: ```` ``` ````
+  - [normal] Trigger removed: `<details>`
+  - [normal] `<!-- quanto:summary -->` ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…```` filter: `` `lead and trail` `` → `[link](https://evil.example)`
+  - [normal] Schedule: `[link](https://evil.example)` → ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…````
+  - [normal] Trigger added: `pull_request_target` (runs with base repository permissions and secrets)
+  - [normal] Job added: ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…````
+  - [normal] Job removed: `x  ## Approved`
+  - [normal] Job `![](https://evil.example/p.png)` renamed to `@org/admins`
+  - [normal] Job `![](https://evil.example/p.png)` runs-on: `@org/admins` → ```` ``` ````
+  - [normal] Job `@org/admins` timeout-minutes: ```` ``` ```` → `<details>`
+  - [normal] Job ```` ``` ```` concurrency: `<details>` → `<!-- quanto:summary -->`
+  - [normal] Job `<details>` matrix: `<!-- quanto:summary -->` → `` `lead and trail` `` jobs
+  - [normal] Job `<!-- quanto:summary -->` matrix is computed at runtime; job count unknown
+  - [normal] Job `` `lead and trail` `` matrix expands to ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…```` jobs (GitHub limit: 256)
+  - [normal] Longest `needs` chain: ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…```` → `x  ## Approved` jobs
+  - [normal] Max concurrent jobs: `x  ## Approved` → ` `
+  - [normal] `needs` cycle: `@org/admins`
+  - [normal] Job ` ` needs unknown job `@org/admins`
+  - [normal] `<details>` permission (`![](https://evil.example/p.png)`): `@org/admins` → ```` ``` ````
+  - [normal] `<!-- quanto:summary -->` permission (`@org/admins`): ```` ``` ```` → `<details>`
+  - [normal] `permissions: write-all` set on ```` ``` ````
+  - [normal] `permissions` removed from `<details>`; repository default applies
+  - [normal] `permissions` declared on `<!-- quanto:summary -->`
+  - [normal] New secret referenced: `` `lead and trail` ``
+  - [normal] Job `[link](https://evil.example)` passes all secrets to `x  ## Approved` (`secrets: inherit`)
+  - [normal] Action added: ````aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa   ```<de…````
+  - [normal] Action removed: `x  ## Approved`
+  - [normal] New third-party action: `@@org/admins` (mutable ref)
+  - [normal] `![](https://evil.example/p.png)`: `@org/admins` → ```` ``` ````
+  - [normal] `@org/admins` changed from commit SHA to mutable ref `<details>`
+  - [normal] Estimated runner minutes per run: `<details>` → `<!-- quanto:summary -->` (`` `lead and trail` `` historical runs per job)
+  - [high] `<details>` permission (job `x  ## Approved`): `read` → `write`
+  - [normal] `unknown.kind ## Approved` `@org/admins`

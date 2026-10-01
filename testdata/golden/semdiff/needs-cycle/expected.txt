@@ -1,4 +1,4 @@
-.github/workflows/ci.yml (modified)
+`.github/workflows/ci.yml` (modified)
   Longest `needs` chain: 2 → 0
   Max concurrent jobs: 1 → 0
-  - [high] `needs` cycle: a → b → a
+  - [high] `needs` cycle: `a → b → a`

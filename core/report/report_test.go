@@ -65,24 +65,24 @@ func TestMessageAllKinds(t *testing.T) {
 		{semdiff.Finding{Kind: "workflow.added"}, "Workflow added"},
 		{semdiff.Finding{Kind: "workflow.removed"}, "Workflow removed"},
 		{semdiff.Finding{Kind: "workflow.renamed", Before: "a.yml", After: "b.yml"}, "Workflow renamed from `a.yml`"},
-		{semdiff.Finding{Kind: "workflow.unanalyzable", Detail: "bad yaml"}, "Could not analyze: bad yaml"},
+		{semdiff.Finding{Kind: "workflow.unanalyzable", Detail: "bad yaml"}, "Could not analyze: `bad yaml`"},
 		{semdiff.Finding{Kind: "trigger.added", Subject: "push"}, "Trigger added: `push`"},
 		{semdiff.Finding{Kind: "trigger.removed", Subject: "push"}, "Trigger removed: `push`"},
-		{semdiff.Finding{Kind: "trigger.filter_changed", Subject: "push", Detail: "branches", Before: "main", After: "dev, main"}, "`push` `branches` filter: main → dev, main"},
-		{semdiff.Finding{Kind: "trigger.schedule_changed", Before: "(none)", After: "'0 * * * *' (24 runs/day)"}, "Schedule: (none) → '0 * * * *' (24 runs/day)"},
+		{semdiff.Finding{Kind: "trigger.filter_changed", Subject: "push", Detail: "branches", Before: "main", After: "dev, main"}, "`push` `branches` filter: `main` → `dev, main`"},
+		{semdiff.Finding{Kind: "trigger.schedule_changed", Before: "(none)", After: "'0 * * * *' (24 runs/day)"}, "Schedule: `(none)` → `'0 * * * *' (24 runs/day)`"},
 		{semdiff.Finding{Kind: "trigger.pull_request_target_added", Subject: "pull_request_target"}, "Trigger added: `pull_request_target` (runs with base repository permissions and secrets)"},
 		{semdiff.Finding{Kind: "job.added", Subject: "lint"}, "Job added: `lint`"},
 		{semdiff.Finding{Kind: "job.removed", Subject: "lint"}, "Job removed: `lint`"},
 		{semdiff.Finding{Kind: "job.renamed", Subject: "check", Before: "lint", After: "check"}, "Job `lint` renamed to `check`"},
-		{semdiff.Finding{Kind: "job.runner_changed", Subject: "build", Before: "ubuntu-latest", After: "macos-latest, ubuntu-latest"}, "Job `build` runs-on: ubuntu-latest → macos-latest, ubuntu-latest"},
-		{semdiff.Finding{Kind: "job.timeout_changed", Subject: "build", Before: "10", After: "30"}, "Job `build` timeout-minutes: 10 → 30"},
-		{semdiff.Finding{Kind: "job.concurrency_changed", Subject: "build", Before: "(none)", After: "ci"}, "Job `build` concurrency: (none) → ci"},
+		{semdiff.Finding{Kind: "job.runner_changed", Subject: "build", Before: "ubuntu-latest", After: "macos-latest, ubuntu-latest"}, "Job `build` runs-on: `ubuntu-latest` → `macos-latest, ubuntu-latest`"},
+		{semdiff.Finding{Kind: "job.timeout_changed", Subject: "build", Before: "10", After: "30"}, "Job `build` timeout-minutes: `10` → `30`"},
+		{semdiff.Finding{Kind: "job.concurrency_changed", Subject: "build", Before: "(none)", After: "ci"}, "Job `build` concurrency: `(none)` → `ci`"},
 		{semdiff.Finding{Kind: "matrix.count_changed", Subject: "test", Before: "6", After: "24"}, "Job `test` matrix: 6 → 24 jobs"},
 		{semdiff.Finding{Kind: "matrix.dynamic", Subject: "test"}, "Job `test` matrix is computed at runtime; job count unknown"},
 		{semdiff.Finding{Kind: "matrix.over_limit", Subject: "test", After: "300"}, "Job `test` matrix expands to 300 jobs (GitHub limit: 256)"},
 		{semdiff.Finding{Kind: "graph.depth_changed", Before: "2", After: "3"}, "Longest `needs` chain: 2 → 3 jobs"},
 		{semdiff.Finding{Kind: "graph.width_changed", Before: "2", After: "4"}, "Max concurrent jobs: 2 → 4"},
-		{semdiff.Finding{Kind: "graph.cycle", Subject: "a", Detail: "a → b → a"}, "`needs` cycle: a → b → a"},
+		{semdiff.Finding{Kind: "graph.cycle", Subject: "a", Detail: "a → b → a"}, "`needs` cycle: `a → b → a`"},
 		{semdiff.Finding{Kind: "graph.unresolved", Subject: "deploy", After: "bild"}, "Job `deploy` needs unknown job `bild`"},
 		{semdiff.Finding{Kind: "permissions.broadened", Subject: "job `build`", Before: "read", After: "write", Detail: "contents"}, "`contents` permission (job `build`): `read` → `write`"},
 		{semdiff.Finding{Kind: "permissions.narrowed", Subject: "workflow", Before: "write", After: "none", Detail: "issues"}, "`issues` permission (workflow): `write` → `none`"},
@@ -204,18 +204,44 @@ func TestMarkdownNoTableWhenMetricsEqual(t *testing.T) {
 }
 
 func paddedDiff(path string, pad int) *semdiff.FileDiff {
-	return &semdiff.FileDiff{
-		Path:     path,
-		Status:   semdiff.StatusUnanalyzable,
-		Findings: []semdiff.Finding{{Kind: "workflow.unanalyzable", Significance: semdiff.Normal, Detail: strings.Repeat("가", pad)}},
+	d := &semdiff.FileDiff{Path: path, Status: semdiff.StatusUnanalyzable}
+	for pad > 0 {
+		n := min(pad, 50)
+		d.Findings = append(d.Findings, semdiff.Finding{Kind: "workflow.unanalyzable", Significance: semdiff.Normal, Detail: strings.Repeat("가", n)})
+		pad -= n
 	}
+	if len(d.Findings) == 0 {
+		d.Findings = []semdiff.Finding{{Kind: "workflow.unanalyzable", Significance: semdiff.Normal}}
+	}
+	return d
+}
+
+func padLen(meta Meta, a, b int) int {
+	return utf8.RuneCountInString(Markdown([]*semdiff.FileDiff{paddedDiff("a.yml", a), paddedDiff("b.yml", b)}, meta))
 }
 
 func TestMarkdownTruncationBoundary(t *testing.T) {
 	meta := Meta{HeadSHA: "abcdef0123"}
-	base := utf8.RuneCountInString(Markdown([]*semdiff.FileDiff{paddedDiff("a.yml", 0), paddedDiff("b.yml", 0)}, meta))
-	room := MaxBodyRunes - base
-	exact := Markdown([]*semdiff.FileDiff{paddedDiff("a.yml", room/2), paddedDiff("b.yml", room-room/2)}, meta)
+	aPad, bPad, found := 0, 0, false
+	for rem := 1; rem <= 50 && !found; rem++ {
+		aPad = 50*400 + rem
+		base := padLen(meta, aPad, 0)
+		k := (MaxBodyRunes - base) / 74
+		for ; k >= 0 && !found; k-- {
+			extra := MaxBodyRunes - padLen(meta, aPad, 50*k)
+			if extra > 74 {
+				break
+			}
+			if extra >= 25 {
+				bPad = 50*k + extra - 24
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("no padding hits the limit exactly")
+	}
+	exact := Markdown([]*semdiff.FileDiff{paddedDiff("a.yml", aPad), paddedDiff("b.yml", bPad)}, meta)
 	if n := utf8.RuneCountInString(exact); n != MaxBodyRunes {
 		t.Fatalf("exact body has %d runes, want %d", n, MaxBodyRunes)
 	}
@@ -225,7 +251,7 @@ func TestMarkdownTruncationBoundary(t *testing.T) {
 	if strings.Contains(exact, "omitted") || !strings.Contains(exact, "b.yml") {
 		t.Errorf("body at limit was truncated")
 	}
-	over := Markdown([]*semdiff.FileDiff{paddedDiff("a.yml", room/2), paddedDiff("b.yml", room-room/2+1)}, meta)
+	over := Markdown([]*semdiff.FileDiff{paddedDiff("a.yml", aPad), paddedDiff("b.yml", bPad+1)}, meta)
 	if utf8.RuneCountInString(over) > MaxBodyRunes {
 		t.Errorf("truncated body exceeds limit")
 	}
@@ -243,10 +269,10 @@ func TestMarkdownTruncationBoundary(t *testing.T) {
 		t.Errorf("single oversized file not removed")
 	}
 	if strings.Contains(single, "a.yml") || !strings.Contains(single, "1 file omitted due to size.") {
-		t.Errorf("single oversized file handling wrong:\n%s", single)
+		t.Errorf("single oversized file handling wrong:\n%.300s", single)
 	}
 	if !strings.HasSuffix(single, footer(meta)) || !strings.HasPrefix(single, CommentMarker+"\n") {
-		t.Errorf("truncated body lost marker or footer:\n%s", single)
+		t.Errorf("truncated body lost marker or footer:\n%.300s", single)
 	}
 }
 
@@ -340,7 +366,7 @@ func TestJSON(t *testing.T) {
 
 func TestText(t *testing.T) {
 	got := Text([]*semdiff.FileDiff{specDiff()})
-	want := ".github/workflows/ci.yml (modified)\n" +
+	want := "`.github/workflows/ci.yml` (modified)\n" +
 		"  Jobs per run: 7 → 25\n" +
 		"  Max concurrent jobs: 2 → 4\n" +
 		"  Est. runner minutes per run: 43 → 172\n" +
@@ -355,7 +381,7 @@ func TestText(t *testing.T) {
 		t.Errorf("text contains escape codes")
 	}
 	renamed := &semdiff.FileDiff{Path: "b.yml", OldPath: "a.yml", Status: semdiff.StatusRenamed, Findings: []semdiff.Finding{}}
-	if got := Text([]*semdiff.FileDiff{renamed}); got != "b.yml (renamed, from a.yml)\n  No execution changes\n" {
+	if got := Text([]*semdiff.FileDiff{renamed}); got != "`b.yml` (renamed, from `a.yml`)\n  No execution changes\n" {
 		t.Errorf("renamed text = %q", got)
 	}
 	if got := Text(nil); got != "No workflow files\n" {

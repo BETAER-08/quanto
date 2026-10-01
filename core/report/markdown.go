@@ -34,7 +34,7 @@ func visibleBlocks(diffs []*semdiff.FileDiff, includeLow bool) []fileBlock {
 }
 
 func writeBlock(b *strings.Builder, blk fileBlock) {
-	b.WriteString("### " + code(blk.diff.Path) + "\n\n")
+	b.WriteString("### " + inline(blk.diff.Path) + "\n\n")
 	if blk.table {
 		b.WriteString("| Metric | Before | After |\n")
 		b.WriteString("|---|---:|---:|\n")
@@ -54,7 +54,7 @@ func writeBlock(b *strings.Builder, blk fileBlock) {
 func footer(meta Meta) string {
 	text := footerText
 	if meta.HeadSHA != "" {
-		text += " Commit " + code(shortSHA(meta.HeadSHA)) + "."
+		text += " Commit " + inline(shortSHA(meta.HeadSHA)) + "."
 	}
 	return "---\n<sub>" + text + "</sub>\n"
 }
@@ -110,7 +110,7 @@ func CheckSummary(diffs []*semdiff.FileDiff, meta Meta) (string, string) {
 		b.WriteString("No execution changes in " + plural(len(sorted), "workflow file", "workflow files") + ".\n\n")
 		if len(sorted) > 0 {
 			for _, d := range sorted {
-				b.WriteString("- " + code(d.Path) + "\n")
+				b.WriteString("- " + inline(d.Path) + "\n")
 			}
 			b.WriteString("\n")
 		}
@@ -119,4 +119,8 @@ func CheckSummary(diffs []*semdiff.FileDiff, meta Meta) (string, string) {
 		return "No execution changes", b.String()
 	}
 	return plural(total, "execution change", "execution changes"), renderBody("", diffs, meta, true)
+}
+
+func NoChanges(headSHA string) string {
+	return CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit " + inline(shortSHA(headSHA)) + ".\n"
 }

@@ -1,6 +1,17 @@
 package report
 
-import "github.com/BETAER-08/quanto/core/semdiff"
+import (
+	"slices"
+
+	"github.com/BETAER-08/quanto/core/semdiff"
+)
+
+func annotationTitle(kind string) string {
+	if slices.Contains(semdiff.Kinds(), kind) {
+		return kind
+	}
+	return inline(kind)
+}
 
 func Annotations(diffs []*semdiff.FileDiff) []Annotation {
 	out := []Annotation{}
@@ -14,7 +25,7 @@ func Annotations(diffs []*semdiff.FileDiff) []Annotation {
 				StartLine: f.Pos.Line,
 				EndLine:   f.Pos.EndLine,
 				Level:     "notice",
-				Title:     f.Kind,
+				Title:     annotationTitle(f.Kind),
 				Message:   Message(f),
 			}
 			if f.Pos.Line == f.Pos.EndLine {

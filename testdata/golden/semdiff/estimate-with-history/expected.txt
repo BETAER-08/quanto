@@ -1,4 +1,4 @@
-.github/workflows/ci.yml (modified)
+`.github/workflows/ci.yml` (modified)
   Jobs per run: 3 → 5
   Max concurrent jobs: 2 → 4
   Est. runner minutes per run: 25 → 45

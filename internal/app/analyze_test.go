@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BETAER-08/quanto/core/report"
 	"github.com/BETAER-08/quanto/internal/github"
 	"github.com/BETAER-08/quanto/internal/metrics"
 	"github.com/prometheus/client_golang/prometheus/testutil"
@@ -51,8 +52,8 @@ func TestPlanFiles(t *testing.T) {
 
 func TestNoChangeBody(t *testing.T) {
 	want := "<!-- quanto:summary -->\n## quanto\n\nNo workflow execution changes as of commit `1111111`.\n"
-	if got := noChangeBody(testHead); got != want {
-		t.Fatalf("noChangeBody = %q", got)
+	if got := report.NoChanges(testHead); got != want {
+		t.Fatalf("NoChanges = %q", got)
 	}
 }
 
@@ -294,7 +295,7 @@ func TestAnalyzeNoChangeUpdatesExistingComment(t *testing.T) {
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
 	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, checkEndpoint, prEndpoint, appEndpoint, listComments, updateComment(12)})
-	if got := h.gh.comments[0].Body; got != noChangeBody(testHead) {
+	if got := h.gh.comments[0].Body; got != report.NoChanges(testHead) {
 		t.Fatalf("comment = %q", got)
 	}
 	checks := h.gh.find("POST", "/check-runs")

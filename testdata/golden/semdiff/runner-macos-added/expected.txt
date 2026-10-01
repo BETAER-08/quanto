@@ -1,2 +1,2 @@
-.github/workflows/ci.yml (modified)
-  - [normal] Job `build` runs-on: ubuntu-latest → macos-latest
+`.github/workflows/ci.yml` (modified)
+  - [normal] Job `build` runs-on: `ubuntu-latest` → `macos-latest`

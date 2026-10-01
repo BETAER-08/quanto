@@ -1,4 +1,4 @@
-.github/workflows/ci.yml (modified)
+`.github/workflows/ci.yml` (modified)
   Jobs per run: 2 → 3
   Longest `needs` chain: 2 → 3
   - [normal] Job added: `deploy`

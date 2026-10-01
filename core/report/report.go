@@ -90,7 +90,7 @@ func metricRows(d *semdiff.FileDiff) []metricRow {
 		{"Max concurrent jobs", intCell(b, b.Width), intCell(a, a.Width)},
 	}
 	if b.RunnerMinutes != "" && a.RunnerMinutes != "" {
-		rows = append(rows, metricRow{"Est. runner minutes per run", b.RunnerMinutes, a.RunnerMinutes})
+		rows = append(rows, metricRow{"Est. runner minutes per run", number(b.RunnerMinutes), number(a.RunnerMinutes)})
 	}
 	return rows
 }
@@ -101,7 +101,7 @@ func jobsCell(m semdiff.Metrics) string {
 	if absent(m) {
 		return absentCell
 	}
-	return m.JobsPerRun
+	return number(m.JobsPerRun)
 }
 
 func intCell(m semdiff.Metrics, v int) string {

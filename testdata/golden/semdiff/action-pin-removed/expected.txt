@@ -1,2 +1,2 @@
-.github/workflows/ci.yml (modified)
+`.github/workflows/ci.yml` (modified)
   - [high] `docker/setup-buildx-action` changed from commit SHA to mutable ref `v3`
