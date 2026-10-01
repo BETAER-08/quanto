@@ -18,38 +18,6 @@ const (
 	ciPath     = ".github/workflows/ci.yml"
 )
 
-func TestPlanFiles(t *testing.T) {
-	files := []github.PullRequestFile{
-		{Filename: "README.md", Status: "modified"},
-		{Filename: ".github/workflows/z.yml", Status: "modified"},
-		{Filename: ".github/workflows/new.yml", Status: "added"},
-		{Filename: ".github/workflows/old.yml", Status: "removed"},
-		{Filename: ".github/workflows/b.yml", PreviousFilename: ".github/workflows/a.yml", Status: "renamed"},
-		{Filename: ".github/workflows/in.yml", PreviousFilename: "ci/in.yml", Status: "renamed"},
-		{Filename: "ci/out.yml", PreviousFilename: ".github/workflows/out.yml", Status: "renamed"},
-		{Filename: ".github/workflows/copy.yaml", PreviousFilename: ".github/workflows/z.yml", Status: "copied"},
-		{Filename: ".github/workflows/nested/x.yml", Status: "added"},
-	}
-	want := []plannedFile{
-		{path: ".github/workflows/b.yml", oldPath: ".github/workflows/a.yml", beforePath: ".github/workflows/a.yml", afterPath: ".github/workflows/b.yml"},
-		{path: ".github/workflows/copy.yaml", afterPath: ".github/workflows/copy.yaml"},
-		{path: ".github/workflows/in.yml", afterPath: ".github/workflows/in.yml"},
-		{path: ".github/workflows/new.yml", afterPath: ".github/workflows/new.yml"},
-		{path: ".github/workflows/old.yml", beforePath: ".github/workflows/old.yml"},
-		{path: ".github/workflows/out.yml", beforePath: ".github/workflows/out.yml"},
-		{path: ".github/workflows/z.yml", beforePath: ".github/workflows/z.yml", afterPath: ".github/workflows/z.yml"},
-	}
-	got := planFiles(files)
-	if len(got) != len(want) {
-		t.Fatalf("planFiles = %+v", got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("planFiles[%d] = %+v, want %+v", i, got[i], want[i])
-		}
-	}
-}
-
 func TestNoChangeBody(t *testing.T) {
 	want := "<!-- quanto:summary -->\n## quanto\n\nNo workflow execution changes as of commit `1111111`.\n"
 	if got := report.NoChanges(testHead); got != want {

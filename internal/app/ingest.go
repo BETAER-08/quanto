@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/BETAER-08/quanto/core/semdiff"
+	"github.com/BETAER-08/quanto/internal/analysis"
 	"github.com/BETAER-08/quanto/internal/store"
 )
 
@@ -34,7 +35,7 @@ func (a *App) ingestWorkflowRun(ctx context.Context, raw []byte) error {
 	if err := p.validate(); err != nil {
 		return err
 	}
-	if !strings.HasPrefix(p.WorkflowPath, workflowDir) {
+	if !strings.HasPrefix(p.WorkflowPath, analysis.WorkflowDir) {
 		return nil
 	}
 	client, err := a.github.Installation(ctx, p.InstallationID)

@@ -139,28 +139,6 @@ func TestHealthAndMetrics(t *testing.T) {
 	}
 }
 
-func TestIsWorkflowPath(t *testing.T) {
-	tests := map[string]bool{
-		".github/workflows/ci.yml":       true,
-		".github/workflows/ci.yaml":      true,
-		".github/workflows/.yml":         false,
-		".github/workflows/a/ci.yml":     false,
-		".github/workflows/ci.yml.bak":   false,
-		"github/workflows/ci.yml":        false,
-		".github/workflows/README.md":    false,
-		"x/.github/workflows/ci.yml":     false,
-		".github/workflows/a.b.yml":      true,
-		".github/workflows/ci.YML":       false,
-		".github/workflows/한글.yml":       true,
-		".github/workflows/with space.y": false,
-	}
-	for in, want := range tests {
-		if got := isWorkflowPath(in); got != want {
-			t.Errorf("isWorkflowPath(%q) = %v, want %v", in, got, want)
-		}
-	}
-}
-
 func TestWorkflowPathFromRun(t *testing.T) {
 	tests := map[string]string{
 		".github/workflows/ci.yml":                 ".github/workflows/ci.yml",

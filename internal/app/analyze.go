@@ -6,64 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
-	"github.com/BETAER-08/quanto/core/model"
 	"github.com/BETAER-08/quanto/core/report"
 	"github.com/BETAER-08/quanto/core/semdiff"
-	"github.com/BETAER-08/quanto/core/source"
+	"github.com/BETAER-08/quanto/internal/analysis"
 	"github.com/BETAER-08/quanto/internal/github"
 	"github.com/BETAER-08/quanto/internal/store"
 )
-
-const workflowDir = ".github/workflows/"
-
-func isWorkflowPath(p string) bool {
-	name, ok := strings.CutPrefix(p, workflowDir)
-	if !ok || strings.Contains(name, "/") {
-		return false
-	}
-	for _, ext := range []string{".yml", ".yaml"} {
-		if strings.HasSuffix(name, ext) && len(name) > len(ext) {
-			return true
-		}
-	}
-	return false
-}
-
-type plannedFile struct {
-	path       string
-	oldPath    string
-	beforePath string
-	afterPath  string
-}
-
-func planFiles(files []github.PullRequestFile) []plannedFile {
-	var out []plannedFile
-	for _, f := range files {
-		newOK := isWorkflowPath(f.Filename)
-		oldOK := f.PreviousFilename != "" && isWorkflowPath(f.PreviousFilename)
-		if !newOK && !oldOK {
-			continue
-		}
-		switch {
-		case f.Status == "renamed" && newOK && oldOK:
-			out = append(out, plannedFile{path: f.Filename, oldPath: f.PreviousFilename, beforePath: f.PreviousFilename, afterPath: f.Filename})
-		case f.Status == "renamed" && oldOK:
-			out = append(out, plannedFile{path: f.PreviousFilename, beforePath: f.PreviousFilename})
-		case f.Status == "renamed", f.Status == "added", f.Status == "copied":
-			out = append(out, plannedFile{path: f.Filename, afterPath: f.Filename})
-		case f.Status == "removed":
-			out = append(out, plannedFile{path: f.Filename, beforePath: f.Filename})
-		default:
-			out = append(out, plannedFile{path: f.Filename, beforePath: f.Filename, afterPath: f.Filename})
-		}
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].path < out[j].path })
-	return out
-}
 
 func decodePayload(raw []byte, out any) error {
 	if err := json.Unmarshal(raw, out); err != nil {
@@ -99,46 +50,26 @@ func (a *App) analyzePR(ctx context.Context, raw []byte) error {
 	if err != nil {
 		return err
 	}
-	files, err := client.PullRequestFiles(ctx, p.Owner, p.Repo, p.Number)
+	res, err := analysis.Load(ctx, client, analysis.Request{
+		Owner:    p.Owner,
+		Repo:     p.Repo,
+		Number:   p.Number,
+		BaseSHA:  p.BaseSHA,
+		HeadSHA:  p.HeadSHA,
+		MaxFiles: a.maxWorkflowFiles,
+	})
 	if err != nil {
 		return err
 	}
-	planned := planFiles(files)
-	if len(planned) == 0 {
+	if len(res.Inputs) == 0 {
 		return nil
 	}
-	mergeBase, err := client.MergeBase(ctx, p.Owner, p.Repo, p.BaseSHA, p.HeadSHA)
-	if err != nil {
-		return err
-	}
-	meta := report.Meta{HeadSHA: p.HeadSHA}
-	if len(planned) > a.maxWorkflowFiles {
-		meta.SkippedFiles = len(planned) - a.maxWorkflowFiles
-		planned = planned[:a.maxWorkflowFiles]
-	}
-	inputs := make([]semdiff.Input, 0, len(planned))
-	for _, f := range planned {
-		in := semdiff.Input{Path: f.path, OldPath: f.oldPath}
-		if f.beforePath != "" {
-			if in.Before, in.BeforeErr, err = a.loadWorkflow(ctx, client, p, f.beforePath, mergeBase); err != nil {
-				return err
-			}
-		}
-		if f.afterPath != "" {
-			if in.After, in.AfterErr, err = a.loadWorkflow(ctx, client, p, f.afterPath, p.HeadSHA); err != nil {
-				return err
-			}
-		}
-		inputs = append(inputs, in)
-	}
+	mergeBase, meta := res.MergeBase, res.Meta
 	durations, err := a.store.Durations(ctx, p.RepositoryID)
 	if err != nil {
 		return err
 	}
-	diffs := make([]*semdiff.FileDiff, 0, len(inputs))
-	for _, in := range inputs {
-		diffs = append(diffs, semdiff.Compare(in, semdiff.Options{Durations: durations}))
-	}
+	diffs := res.Compare(semdiff.Options{Durations: durations})
 	title, summary := report.CheckSummary(diffs, meta)
 	checkRunID, err := a.publishCheckRun(ctx, client, p, github.CheckRun{
 		HeadSHA:     p.HeadSHA,
@@ -205,28 +136,6 @@ func (a *App) publishCheckRun(ctx context.Context, client *github.Client, p Anal
 	return client.CreateCheckRun(ctx, p.Owner, p.Repo, run)
 }
 
-func (a *App) loadWorkflow(ctx context.Context, client *github.Client, p AnalyzePayload, path, ref string) (*model.Workflow, error, error) {
-	content, found, err := client.FileContent(ctx, p.Owner, p.Repo, path, ref)
-	if errors.Is(err, github.ErrFileTooLarge) {
-		return nil, github.ErrFileTooLarge, nil
-	}
-	if err != nil {
-		return nil, nil, err
-	}
-	if !found || len(content) == 0 {
-		return nil, nil, nil
-	}
-	doc, err := source.Load(path, content)
-	if err != nil {
-		return nil, err, nil
-	}
-	w, _, err := model.Parse(doc)
-	if err != nil {
-		return nil, err, nil
-	}
-	return w, nil, nil
-}
-
 func (a *App) botLogin(ctx context.Context) (string, error) {
 	a.slugMu.Lock()
 	defer a.slugMu.Unlock()
@@ -260,29 +169,13 @@ func (a *App) findComment(ctx context.Context, client *github.Client, p AnalyzeP
 	return 0, false, nil
 }
 
-func hasFindings(diffs []*semdiff.FileDiff) bool {
-	for _, d := range diffs {
-		if d != nil && len(d.Findings) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 func isNotFound(err error) bool {
 	var apiErr *github.APIError
 	return errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
 }
 
 func (a *App) publishComment(ctx context.Context, client *github.Client, p AnalyzePayload, diffs []*semdiff.FileDiff, meta report.Meta) error {
-	publishable := report.Publishable(diffs)
-	body := report.NoChanges(p.HeadSHA)
-	switch {
-	case publishable:
-		body = report.Markdown(diffs, meta)
-	case hasFindings(diffs):
-		body = report.BelowThreshold(p.HeadSHA)
-	}
+	body, publishable := analysis.CommentBody(diffs, meta)
 	id, ok, err := a.store.CommentID(ctx, p.RepositoryID, p.Number)
 	if err != nil {
 		return err
