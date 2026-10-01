@@ -107,6 +107,10 @@ func (a *App) analyzePR(ctx context.Context, raw []byte) error {
 	if len(planned) == 0 {
 		return nil
 	}
+	mergeBase, err := client.MergeBase(ctx, p.Owner, p.Repo, p.BaseSHA, p.HeadSHA)
+	if err != nil {
+		return err
+	}
 	meta := report.Meta{HeadSHA: p.HeadSHA}
 	if len(planned) > a.maxWorkflowFiles {
 		meta.SkippedFiles = len(planned) - a.maxWorkflowFiles
@@ -116,7 +120,7 @@ func (a *App) analyzePR(ctx context.Context, raw []byte) error {
 	for _, f := range planned {
 		in := semdiff.Input{Path: f.path, OldPath: f.oldPath}
 		if f.beforePath != "" {
-			if in.Before, in.BeforeErr, err = a.loadWorkflow(ctx, client, p, f.beforePath, p.BaseSHA); err != nil {
+			if in.Before, in.BeforeErr, err = a.loadWorkflow(ctx, client, p, f.beforePath, mergeBase); err != nil {
 				return err
 			}
 		}
@@ -173,7 +177,7 @@ func (a *App) analyzePR(ctx context.Context, raw []byte) error {
 		RepositoryID: p.RepositoryID,
 		PRNumber:     p.Number,
 		HeadSHA:      p.HeadSHA,
-		BaseSHA:      p.BaseSHA,
+		BaseSHA:      mergeBase,
 		Result:       result,
 		FindingCount: total,
 		CheckRunID:   checkRunID,

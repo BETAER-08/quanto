@@ -76,21 +76,22 @@ func (r loggedRequest) String() string {
 }
 
 type fakeGitHub struct {
-	t        *testing.T
-	server   *httptest.Server
-	mu       sync.Mutex
-	log      []loggedRequest
-	files    []github.PullRequestFile
-	contents map[string]string
-	headSHA  string
-	comments []github.IssueComment
-	nextID   int64
-	runs     []github.WorkflowRun
-	jobs     []map[string]any
-	limited  map[string]bool
-	broken   map[string]bool
-	slow     map[string]bool
-	checks   []*fakeCheckRun
+	t         *testing.T
+	server    *httptest.Server
+	mu        sync.Mutex
+	log       []loggedRequest
+	files     []github.PullRequestFile
+	contents  map[string]string
+	headSHA   string
+	comments  []github.IssueComment
+	nextID    int64
+	runs      []github.WorkflowRun
+	jobs      []map[string]any
+	limited   map[string]bool
+	broken    map[string]bool
+	slow      map[string]bool
+	checks    []*fakeCheckRun
+	mergeBase string
 }
 
 type fakeCheckRun struct {
@@ -123,7 +124,7 @@ func decodeCheckBody(t *testing.T, r *http.Request) (string, int) {
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
-	f := &fakeGitHub{t: t, contents: map[string]string{}, headSHA: testHead, nextID: 5000, limited: map[string]bool{}, broken: map[string]bool{}, slow: map[string]bool{}}
+	f := &fakeGitHub{t: t, contents: map[string]string{}, headSHA: testHead, mergeBase: testBase, nextID: 5000, limited: map[string]bool{}, broken: map[string]bool{}, slow: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /app/installations/{id}/access_tokens", func(w http.ResponseWriter, r *http.Request) {
 		f.json(w, http.StatusCreated, map[string]any{"token": "ghs_test", "expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)})
@@ -145,6 +146,16 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.jsonLocked(w, http.StatusOK, map[string]any{"number": n, "state": "open", "head": map[string]string{"sha": f.headSHA}, "base": map[string]string{"sha": testBase}})
+	})
+	mux.HandleFunc("GET /repos/{o}/{r}/compare/{basehead}", func(w http.ResponseWriter, r *http.Request) {
+		base, head, ok := strings.Cut(r.PathValue("basehead"), "...")
+		if !ok || base != testBase || head == "" {
+			f.json(w, http.StatusNotFound, map[string]string{"message": "Not Found"})
+			return
+		}
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.jsonLocked(w, http.StatusOK, map[string]any{"status": "diverged", "merge_base_commit": map[string]string{"sha": f.mergeBase}, "base_commit": map[string]string{"sha": base}})
 	})
 	mux.HandleFunc("GET /repos/{o}/{r}/contents/{path...}", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()

@@ -121,6 +121,26 @@ func (c *Client) PullRequest(ctx context.Context, owner, repo string, number int
 	return &pr, nil
 }
 
+func (c *Client) MergeBase(ctx context.Context, owner, repo, base, head string) (string, error) {
+	auth, err := c.auth(ctx)
+	if err != nil {
+		return "", err
+	}
+	endpoint := c.t.endpoint(url.Values{"per_page": {"1"}}, repoSegments(owner, repo, "compare", base+"..."+head)...)
+	var payload struct {
+		MergeBaseCommit struct {
+			SHA string `json:"sha"`
+		} `json:"merge_base_commit"`
+	}
+	if _, err := c.t.getJSON(ctx, endpoint, auth, &payload); err != nil {
+		return "", fmt.Errorf("github: compare commits: %w", err)
+	}
+	if payload.MergeBaseCommit.SHA == "" {
+		return "", errors.New("github: compare commits: empty merge base")
+	}
+	return payload.MergeBaseCommit.SHA, nil
+}
+
 func (c *Client) PullRequestFiles(ctx context.Context, owner, repo string, number int) ([]PullRequestFile, error) {
 	auth, err := c.auth(ctx)
 	if err != nil {

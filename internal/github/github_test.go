@@ -919,6 +919,30 @@ func TestUpdateCheckRunBatches(t *testing.T) {
 	}
 }
 
+func TestMergeBase(t *testing.T) {
+	f := newFake(t)
+	f.handle("GET /repos/octo/hello/compare/aaa...bbb", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("per_page") != "1" {
+			t.Errorf("query = %q", r.URL.RawQuery)
+		}
+		writeJSON(t, w, http.StatusOK, map[string]any{"status": "diverged", "base_commit": map[string]any{"sha": "aaa"}, "merge_base_commit": map[string]any{"sha": "mmm"}})
+	})
+	got, err := f.client(t).MergeBase(context.Background(), testOwner, testRepo, "aaa", "bbb")
+	if err != nil || got != "mmm" {
+		t.Fatalf("MergeBase = %q, %v", got, err)
+	}
+	f.handle("GET /repos/octo/hello/compare/aaa...empty", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusOK, map[string]any{"merge_base_commit": map[string]any{}})
+	})
+	if got, err := f.client(t).MergeBase(context.Background(), testOwner, testRepo, "aaa", "empty"); err == nil || got != "" {
+		t.Fatalf("MergeBase(empty) = %q, %v", got, err)
+	}
+	var apiErr *APIError
+	if _, err := f.client(t).MergeBase(context.Background(), testOwner, testRepo, "aaa", "missing"); !errors.As(err, &apiErr) || apiErr.Status != http.StatusNotFound {
+		t.Fatalf("MergeBase(missing) = %v", err)
+	}
+}
+
 func TestFindCheckRun(t *testing.T) {
 	f := newFake(t)
 	f.handle("GET /repos/octo/hello/commits/abc123/check-runs", func(w http.ResponseWriter, r *http.Request) {

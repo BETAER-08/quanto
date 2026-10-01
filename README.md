@@ -33,7 +33,7 @@ The pull request comment additionally names the analyzed head commit in the foot
 
 | Permission | Access | Used for |
 |---|---|---|
-| `contents` | read | Reading workflow files at the base and head commits of the pull request |
+| `contents` | read | Finding the merge base of the pull request and reading workflow files at the merge base and head commits |
 | `pull_requests` | write | Listing changed files, re-reading the head commit, and creating or updating the summary comment |
 | `checks` | write | Creating the `quanto` Check Run with its summary and line annotations |
 | `actions` | read | Reading completed workflow runs and job timings for runner-minute estimates |

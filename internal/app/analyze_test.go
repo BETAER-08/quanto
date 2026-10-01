@@ -97,6 +97,7 @@ const (
 	prEndpoint        = "GET /repos/octo/demo/pulls/3"
 	checkEndpoint     = "POST /repos/octo/demo/check-runs"
 	findCheckEndpoint = "GET /repos/octo/demo/commits/" + testHead + "/check-runs"
+	compareEndpoint   = "GET /repos/octo/demo/compare/" + testBase + "..." + testHead
 	appEndpoint       = "GET /app"
 	listComments      = "GET /repos/octo/demo/issues/3/comments"
 	createComment     = "POST /repos/octo/demo/issues/3/comments"
@@ -142,6 +143,7 @@ func TestAnalyzeFileStatuses(t *testing.T) {
 	h.runOne()
 	expectEndpoints(t, h, []string{
 		filesEndpoint,
+		compareEndpoint,
 		contentsEndpoint + ".github/workflows/a.yml",
 		contentsEndpoint + ".github/workflows/b.yml",
 		contentsEndpoint + ciPath,
@@ -232,7 +234,7 @@ func TestAnalyzeHeadMovedSkipsComment(t *testing.T) {
 	h.gh.headSHA = "9999999999999999999999999999999999999999"
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
-	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint})
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint})
 	expectJob(t, h, "done", 1)
 	if n := h.count("SELECT count(*) FROM analyses"); n != 1 {
 		t.Fatalf("analyses = %d", n)
@@ -254,7 +256,7 @@ func TestAnalyzeUpdatesBotCommentOnly(t *testing.T) {
 	}
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
-	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments, updateComment(12)})
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments, updateComment(12)})
 	if h.gh.comments[0].Body != human {
 		t.Fatal("human comment modified")
 	}
@@ -268,7 +270,7 @@ func TestAnalyzeUpdatesBotCommentOnly(t *testing.T) {
 	h.gh.resetLog()
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
-	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, "GET /repos/octo/demo/check-runs/900", "PATCH /repos/octo/demo/check-runs/900", prEndpoint, updateComment(12)})
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, "GET /repos/octo/demo/check-runs/900", "PATCH /repos/octo/demo/check-runs/900", prEndpoint, updateComment(12)})
 }
 
 func report0(text string) string {
@@ -283,7 +285,7 @@ func TestAnalyzeIgnoresHumanCommentWithMarker(t *testing.T) {
 	h.gh.comments = []github.IssueComment{{ID: 10, Body: human, User: github.User{Login: "alice"}}}
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
-	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments, createComment})
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments, createComment})
 	if h.gh.comments[0].Body != human || len(h.gh.comments) != 2 {
 		t.Fatalf("comments = %+v", h.gh.comments)
 	}
@@ -296,7 +298,7 @@ func TestAnalyzeNoChangeUpdatesExistingComment(t *testing.T) {
 	h.gh.comments = []github.IssueComment{{ID: 12, Body: report0("old findings"), User: github.User{Login: botLogin}}}
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
-	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments, updateComment(12)})
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments, updateComment(12)})
 	if got := h.gh.comments[0].Body; got != report.NoChanges(testHead) {
 		t.Fatalf("comment = %q", got)
 	}
@@ -312,7 +314,7 @@ func TestAnalyzeNoChangeWithoutCommentDoesNothing(t *testing.T) {
 	setupIdentical(h)
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
-	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments})
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments})
 	if n := h.count("SELECT count(*) FROM pr_comments"); n != 0 {
 		t.Fatalf("pr_comments = %d", n)
 	}
@@ -331,7 +333,7 @@ func TestAnalyzeCachedCommentDeleted(t *testing.T) {
 	h.gh.comments = []github.IssueComment{{ID: 12, Body: report0("old"), User: github.User{Login: botLogin}}}
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
-	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, updateComment(999), appEndpoint, listComments, updateComment(12)})
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, updateComment(999), appEndpoint, listComments, updateComment(12)})
 	expectJob(t, h, "done", 1)
 	id, ok, err := h.store.CommentID(context.Background(), 42, 3)
 	if err != nil || !ok || id != 12 {
@@ -348,7 +350,7 @@ func TestAnalyzeCachedCommentDeletedRecreates(t *testing.T) {
 	}
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
-	expectEndpoints(t, h, []string{filesEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, updateComment(999), appEndpoint, listComments, createComment})
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, updateComment(999), appEndpoint, listComments, createComment})
 	id, ok, err := h.store.CommentID(context.Background(), 42, 3)
 	if err != nil || !ok || id != 5001 {
 		t.Fatalf("cached = %d %v %v", id, ok, err)
@@ -443,6 +445,65 @@ func TestAnalyzeIgnoresOtherAppsCheckRuns(t *testing.T) {
 	}
 	if n := len(h.gh.find("PATCH", "/check-runs/800")); n != 0 {
 		t.Fatalf("other app's check run patched %d times", n)
+	}
+}
+
+func TestAnalyzeUsesMergeBase(t *testing.T) {
+	const mergeBase = "3333333333333333333333333333333333333333"
+	h := newHarness(t, nil)
+	h.seedRepo()
+	original := readFixture(t, fixtureDir+"matrix-axis-added/before.yml")
+	changed := readFixture(t, fixtureDir+"matrix-axis-added/after.yml")
+	baseTip := original + "  deploy:\n    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n    steps:\n      - uses: other/deploy@v1\n"
+	h.gh.mergeBase = mergeBase
+	h.gh.files = []github.PullRequestFile{{Filename: ciPath, Status: "modified"}}
+	h.gh.setContent(mergeBase, ciPath, original)
+	h.gh.setContent(testBase, ciPath, baseTip)
+	h.gh.setContent(testHead, ciPath, changed)
+	h.enqueue(KindAnalyzePR, analyzePayload())
+	h.runOne()
+	expectJob(t, h, "done", 1)
+	refs := []string{}
+	for _, r := range h.gh.find("GET", ".yml") {
+		refs = append(refs, r.Query)
+	}
+	if !equalStrings(refs, []string{"ref=" + mergeBase, "ref=" + testHead}) {
+		t.Fatalf("content refs = %v", refs)
+	}
+	var result string
+	if err := h.db.QueryRow(context.Background(), "SELECT result::text FROM analyses WHERE repository_id = 42 AND pr_number = 3 AND head_sha = $1 AND base_sha = $2", testHead, mergeBase).Scan(&result); err != nil {
+		t.Fatalf("analysis with merge-base base_sha: %v", err)
+	}
+	for _, unwanted := range []string{"deploy", "job.removed", "permissions", "action.removed"} {
+		if strings.Contains(result, unwanted) {
+			t.Fatalf("base branch change %q reported:\n%s", unwanted, result)
+		}
+	}
+	for _, wanted := range []string{"matrix.count_changed", "graph.width_changed"} {
+		if !strings.Contains(result, wanted) {
+			t.Fatalf("PR change %q missing:\n%s", wanted, result)
+		}
+	}
+	for _, c := range h.gh.comments {
+		if strings.Contains(c.Body, "deploy") {
+			t.Fatalf("comment mentions base branch change:\n%s", c.Body)
+		}
+	}
+}
+
+func TestAnalyzeMergeBaseFailure(t *testing.T) {
+	h := newHarness(t, nil)
+	h.seedRepo()
+	setupModified(h)
+	h.gh.broken[compareEndpoint] = true
+	h.enqueue(KindAnalyzePR, analyzePayload())
+	h.runOne()
+	job := expectJob(t, h, "pending", 1)
+	if !strings.Contains(job.LastError, "compare commits") {
+		t.Fatalf("last_error = %q", job.LastError)
+	}
+	if n := len(h.gh.find("GET", ".yml")); n != 0 {
+		t.Fatalf("content read before merge base: %d", n)
 	}
 }
 

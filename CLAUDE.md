@@ -942,6 +942,7 @@ func (c *AppClient) Installation(ctx, installationID int64) (*Client, error)
 
 func (c *Client) PullRequest(ctx, owner, repo string, number int) (*PullRequest, error)
 func (c *Client) PullRequestFiles(ctx, owner, repo string, number int) ([]PullRequestFile, error)
+func (c *Client) MergeBase(ctx, owner, repo, base, head string) (string, error)
 func (c *Client) FileContent(ctx, owner, repo, path, ref string) ([]byte, bool, error)
 func (c *Client) CreateCheckRun(ctx, owner, repo string, run CheckRun) (int64, error)
 func (c *Client) UpdateCheckRun(ctx, owner, repo string, id int64, run CheckRun) error
@@ -953,6 +954,7 @@ func (c *Client) WorkflowRuns(ctx, owner, repo string, limit int) ([]WorkflowRun
 func (c *Client) RunJobs(ctx, owner, repo string, runID int64) ([]RunJob, error)
 ```
 
+- `MergeBase`는 `GET /repos/{o}/{r}/compare/{base}...{head}?per_page=1`의 `merge_base_commit.sha`를 반환한다. 비어 있으면 에러다.
 - `PullRequestFiles`는 최대 3000개까지 읽는다. `PullRequestFile{Filename, PreviousFilename, Status}`.
 - `FileContent`는 `GET /repos/{o}/{r}/contents/{path}?ref={ref}`에 `Accept: application/vnd.github.raw+json`을 쓴다. 404면 `(nil, false, nil)`이다. 경로 세그먼트는 URL 이스케이프한다. 본문은 `io.LimitReader(body, 1<<20+1)`로 읽는다. 1 MiB(`MaxFileSize = 1 << 20`)를 넘으면 `(nil, true, ErrFileTooLarge)`를 반환한다. `ErrFileTooLarge`의 메시지는 `file exceeds 1 MiB`다. 전체 본문을 메모리에 읽은 뒤 크기를 검사하지 않는다.
 - Check Run 어노테이션은 요청당 최대 50개다. `CreateCheckRun`은 첫 요청에 50개를 담아 생성하고, 나머지는 같은 Check Run에 `PATCH`로 50개씩 추가한다. 중간 배치가 실패하면 생성된 ID와 에러를 함께 반환한다. `status: completed`, `conclusion: neutral`, `name: quanto`(`CheckRunName`).
@@ -1154,19 +1156,20 @@ func (s *Store) PendingCount(ctx) (int64, error)
 2. 설치 클라이언트를 얻는다.
 3. `PullRequestFiles`를 읽는다. 워크플로 파일 판정은 정규식 `^\.github/workflows/[^/]+\.ya?ml$`를 `Filename`과 `PreviousFilename`에 적용한다. 해당 파일이 없으면 Check Run 없이 완료한다.
 4. 경로 사전순으로 정렬하고 `QUANTO_MAX_WORKFLOW_FILES`까지만 분석한다. 나머지 개수는 `Meta.SkippedFiles`다.
-5. 파일마다:
+5. **merge-base.** 워크플로 파일이 하나라도 있으면 `MergeBase(base_sha, head_sha)`로 merge-base를 구한다. PR 파일 목록은 merge-base 기준 diff이므로 before 쪽도 merge-base에서 읽어야 한다. `base_sha`(base 브랜치 끝)에서 읽으면 PR을 연 뒤 base 브랜치가 같은 워크플로를 바꾼 경우 그 변경이 PR의 변경처럼(반대 방향으로) 보고된다. `analyses.base_sha`에도 merge-base를 저장한다. 실패는 일반 에러(Fail)다.
+6. 파일마다:
    - `added` → before 없음. `removed` → after 없음. `renamed` → before는 `PreviousFilename`, `OldPath`를 설정.
-   - `FileContent`로 base는 `base_sha`, head는 `head_sha`에서 읽는다. `github.ErrFileTooLarge`면 해당 쪽 에러는 `ErrFileTooLarge`(`file exceeds 1 MiB`)다.
+   - `FileContent`로 before 쪽은 merge-base, head는 `head_sha`에서 읽는다. `github.ErrFileTooLarge`면 해당 쪽 에러는 `ErrFileTooLarge`(`file exceeds 1 MiB`)다.
    - `source.Load` → `model.Parse`. 에러는 Input의 `BeforeErr`, `AfterErr`로 넘긴다.
-6. `store.Durations(repository_id)`로 DurationSource를 만든다.
-7. 파일별 `semdiff.Compare`.
-8. Check Run: `CheckSummary`와 `Annotations`로 만든다. Finding이 없어도 만든다. 먼저 `FindCheckRun(head_sha, "quanto")`로 자기 App의 기존 Check Run을 찾고, 있으면 `UpdateCheckRun`, 없으면 `CreateCheckRun`이다. 재시도와 같은 head의 재분석이 Check Run을 중복 생성하지 않게 하기 위해서다.
-9. 코멘트 전에 `PullRequest`를 다시 읽는다. 현재 head SHA가 페이로드의 `head_sha`와 다르면 코멘트 단계를 건너뛴다.
-10. 코멘트 대상 ID는 `pr_comments` 캐시를 먼저 보고, 없으면 `IssueComments` 중 본문이 `CommentMarker`로 시작하고 작성자 login이 `{app slug}[bot]`인 것을 찾는다(App slug는 `App()` 결과를 프로세스 수명 동안 캐시).
+7. `store.Durations(repository_id)`로 DurationSource를 만든다.
+8. 파일별 `semdiff.Compare`.
+9. Check Run: `CheckSummary`와 `Annotations`로 만든다. Finding이 없어도 만든다. 먼저 `FindCheckRun(head_sha, "quanto")`로 자기 App의 기존 Check Run을 찾고, 있으면 `UpdateCheckRun`, 없으면 `CreateCheckRun`이다. 재시도와 같은 head의 재분석이 Check Run을 중복 생성하지 않게 하기 위해서다.
+10. 코멘트 전에 `PullRequest`를 다시 읽는다. 현재 head SHA가 페이로드의 `head_sha`와 다르면 코멘트 단계를 건너뛴다.
+11. 코멘트 대상 ID는 `pr_comments` 캐시를 먼저 보고, 없으면 `IssueComments` 중 본문이 `CommentMarker`로 시작하고 작성자 login이 `{app slug}[bot]`인 것을 찾는다(App slug는 `App()` 결과를 프로세스 수명 동안 캐시).
     - `Publishable`이면 있으면 수정, 없으면 생성하고 캐시에 기록한다.
     - 아니면서 기존 코멘트가 있으면 `report.NoChanges(head_sha)`로 수정한다.
     - 아니면서 기존 코멘트가 없으면 아무것도 하지 않는다.
-11. `SaveAnalysis`로 저장한다.
+12. `SaveAnalysis`로 저장한다.
 
 ### 15.4 `ingest_workflow_run` 핸들러
 
@@ -1183,7 +1186,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 ### 15.6 테스트
 
 - 웹: 서명 없음·오류·정상, 필수 헤더 누락, 딜리버리 중복, 이벤트별 enqueue 결과, 비공개 저장소 무시, 본문 크기 초과.
-- 워커 핸들러: 가짜 GitHub(`httptest`)와 실제 store(`QUANTO_TEST_DATABASE_URL` 필요)로 검증한다. 워크플로 변경 없음, 수정·추가·삭제·이름 변경, head 이동 시 코멘트 생략, 기존 코멘트 수정, 변화 없음으로 바뀐 경우의 문구, 어노테이션 51개 이상의 배치, 레이트 리밋 Defer, 이력 수집 필터링과 통계 재계산.
+- 워커 핸들러: 가짜 GitHub(`httptest`)와 실제 store(`QUANTO_TEST_DATABASE_URL` 필요)로 검증한다. PR을 연 뒤 base 브랜치가 같은 워크플로를 바꾼 상황에서 base 쪽 변경이 Finding에 나오지 않음(merge-base), 재시도가 Check Run을 새로 만들지 않고 어노테이션을 이어 올림, 핸들러 타임아웃, lost lease, 워크플로 변경 없음, 수정·추가·삭제·이름 변경, head 이동 시 코멘트 생략, 기존 코멘트 수정, 변화 없음으로 바뀐 경우의 문구, 어노테이션 51개 이상의 배치, 레이트 리밋 Defer, 이력 수집 필터링과 통계 재계산.
 - **종단 테스트** `internal/app/e2e_test.go`: 서명된 `pull_request` 웹훅 → web 핸들러 → 큐 → 워커 한 사이클 → 가짜 GitHub가 받은 Check Run 페이로드와 코멘트 본문을 골든 파일과 비교한다.
 
 ---
