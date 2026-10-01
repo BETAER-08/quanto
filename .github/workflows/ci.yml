@@ -35,3 +35,28 @@ jobs:
         run: go test -run '^$' -fuzz FuzzExpand -fuzztime 20s -fuzzminimizetime 5s ./core/matrix/
       - name: fuzz FuzzCompare
         run: go test -run '^$' -fuzz FuzzCompare -fuzztime 20s -fuzzminimizetime 5s ./core/semdiff/
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: quanto
+          POSTGRES_PASSWORD: quanto
+          POSTGRES_DB: quanto_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quanto -d quanto_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      QUANTO_TEST_DATABASE_URL: postgres://quanto:quanto@localhost:5432/quanto_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: integration tests
+        run: go test -race ./internal/...
