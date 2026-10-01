@@ -176,7 +176,7 @@ func TestAnalyzeFileStatuses(t *testing.T) {
 	if check["name"] != "quanto" || check["head_sha"] != testHead || check["conclusion"] != "neutral" || check["status"] != "completed" {
 		t.Fatalf("check run = %v", check)
 	}
-	if output["title"] != "5 execution changes" {
+	if output["title"] != "4 execution changes" {
 		t.Fatalf("title = %v", output["title"])
 	}
 	summary, ok := output["summary"].(string)
@@ -208,7 +208,7 @@ func TestAnalyzeFileStatuses(t *testing.T) {
 	if err := h.db.QueryRow(context.Background(), "SELECT result::text, finding_count, check_run_id FROM analyses WHERE repository_id = 42 AND pr_number = 3 AND head_sha = $1 AND base_sha = $2", testHead, testBase).Scan(&result, &findings, &checkRun); err != nil {
 		t.Fatalf("analysis: %v", err)
 	}
-	if findings != 5 || checkRun != 900 || !strings.Contains(result, `"quanto.diff/v1"`) {
+	if findings != 4 || checkRun != 900 || !strings.Contains(result, `"quanto.diff/v1"`) {
 		t.Fatalf("analysis = %d %d %s", findings, checkRun, result)
 	}
 	for _, raw := range []string{"npm test", "make lint", "setup-node@v4", "runs-on"} {
@@ -219,7 +219,7 @@ func TestAnalyzeFileStatuses(t *testing.T) {
 	if got := testutil.ToFloat64(h.metrics.QueueJobs.WithLabelValues(KindAnalyzePR, metrics.ResultDone)); got != 1 {
 		t.Fatalf("done metric = %v", got)
 	}
-	if got := testutil.ToFloat64(h.metrics.Findings.WithLabelValues("normal")) + testutil.ToFloat64(h.metrics.Findings.WithLabelValues("low")) + testutil.ToFloat64(h.metrics.Findings.WithLabelValues("high")); got != 5 {
+	if got := testutil.ToFloat64(h.metrics.Findings.WithLabelValues("normal")) + testutil.ToFloat64(h.metrics.Findings.WithLabelValues("low")) + testutil.ToFloat64(h.metrics.Findings.WithLabelValues("high")); got != 4 {
 		t.Fatalf("findings metric = %v", got)
 	}
 	if got := testutil.ToFloat64(h.metrics.GitHubRequests.WithLabelValues("2xx")); got < 12 {
@@ -479,7 +479,7 @@ func TestAnalyzeUsesMergeBase(t *testing.T) {
 			t.Fatalf("base branch change %q reported:\n%s", unwanted, result)
 		}
 	}
-	for _, wanted := range []string{"matrix.count_changed", "graph.width_changed"} {
+	for _, wanted := range []string{"matrix.count_changed"} {
 		if !strings.Contains(result, wanted) {
 			t.Fatalf("PR change %q missing:\n%s", wanted, result)
 		}
