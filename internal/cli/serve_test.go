@@ -125,7 +125,7 @@ func TestMigrateAgainstDatabase(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("QUANTO_DATABASE_URL", u.String())
 	code, stdout, stderr := run("migrate")
-	if code != exitOK || stdout != "applied 0001_init.sql\n" {
+	if code != exitOK || stdout != "applied 0001_init.sql\napplied 0002_job_runs_completed_at.sql\n" {
 		t.Fatalf("first migrate = %d %q %q", code, stdout, stderr)
 	}
 	code, stdout, stderr = run("migrate")
