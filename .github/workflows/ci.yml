@@ -29,3 +29,5 @@ jobs:
         run: go test -run Corpus ./...
       - name: fuzz FuzzLoad
         run: go test -run '^$' -fuzz FuzzLoad -fuzztime 20s -fuzzminimizetime 5s ./core/source/
+      - name: fuzz FuzzParseTemplate
+        run: go test -run '^$' -fuzz FuzzParseTemplate -fuzztime 20s -fuzzminimizetime 5s ./core/expr/

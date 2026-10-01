@@ -805,5 +805,5 @@ func TestCorpusModel(t *testing.T) {
 	for _, k := range keys {
 		t.Logf("diagnostic %s: %d", k, counts[k])
 	}
-	t.Logf("corpus files: %d, jobs: %d, diagnostics: %d", len(files), jobs, len(keys))
+	t.Logf("corpus files: %d, jobs: %d, diagnostic codes: %d", len(files), jobs, len(keys))
 }

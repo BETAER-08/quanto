@@ -19,6 +19,7 @@ test-race:
 
 fuzz:
 	go test -run '^$$' -fuzz FuzzLoad -fuzztime $(FUZZTIME) ./core/source/
+	go test -run '^$$' -fuzz FuzzParseTemplate -fuzztime $(FUZZTIME) ./core/expr/
 
 corpus:
 	./scripts/fetch-corpus.sh
