@@ -857,6 +857,7 @@ func Annotations(diffs []*semdiff.FileDiff) []Annotation
 func Text(diffs []*semdiff.FileDiff) string
 func JSON(diffs []*semdiff.FileDiff, meta Meta) ([]byte, error)
 func NoChanges(headSHA string) string
+func BelowThreshold(headSHA string) string
 func Plain(s string) string
 ```
 
@@ -869,9 +870,10 @@ func Plain(s string) string
 - 9.4 표의 `{subject}`, `{before}`, `{after}`, `{detail}` 중 사용자 유래 값은 표에 백틱 표기가 있든 없든 필드 전체를 `inline`으로 출력한다. 스케줄 표기(`'0 * * * *' (24 runs/day)`), runs-on 표기, `(none)`, 순환 경로(`a → b → a`)는 필드 하나로 감싼다. 권한 스코프 표기 `job `+"`id`"는 `job ` + `inline(id)`로 출력한다. `action.third_party_added`의 `{detail}`은 비어 있지 않으면 고정 문구 ` (mutable ref)`를 낸다.
 - `trigger.filter_changed`의 `{before}`, `{after}`는 `, `로 나눈 원소 하나하나를 `inline`으로 출력하고 `, `로 잇는다.
 - 숫자 필드(매트릭스 수, 그래프 깊이·너비, 추정 분, 샘플 수, Metrics 표의 값)는 `?`, 10진 정수, `≥` + 10진 정수일 때만 그대로 쓰고, 그 외 값은 `inline`으로 출력한다.
-- `Markdown`, `CheckSummary`, `Annotations`(message와 title), `Text`, `NoChanges` 전부 이 규칙을 따른다. `Text`의 파일 경로 줄도 `inline`을 거친다.
+- `Markdown`, `CheckSummary`, `Annotations`(message와 title), `Text`, `NoChanges`, `BelowThreshold` 전부 이 규칙을 따른다. `Text`의 파일 경로 줄도 `inline`을 거친다.
 - `Plain(s)`: `inline`의 1~2단계만 적용하고 펜스는 씌우지 않는다. `inline`은 `Plain`의 결과에 3단계를 적용하므로 두 출력의 정리 규칙은 같다. 테스트는 `ESC[31m`(색상), `ESC]0;title BEL`(창 제목), `\r` 덮어쓰기, C1 `CSI`, DEL, 80·81 rune 경계를 검증한다.
-- `NoChanges(headSHA string) string`은 15.3의 "변화 없음" 코멘트 본문을 만든다: `CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit " + inline(sha7) + ".\n"`.
+- `NoChanges(headSHA string) string`은 15.3의 "변화 없음" 코멘트 본문을 만든다: `CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit " + inline(sha7) + ".\n"`. 분석한 모든 파일의 Finding이 Low 포함 0개일 때만 쓴다.
+- `BelowThreshold(headSHA string) string`은 15.3의 "게시 기준 미달" 코멘트 본문을 만든다: `CommentMarker + "\n## quanto\n\nNo changes that meet the comment threshold as of commit " + inline(sha7) + ". Details are in the quanto check run.\n"`. Finding이 하나 이상 있지만 `Publishable`이 false일 때 쓴다.
 - `Markdown`의 형식은 다음과 같다. 파일은 경로 사전순이다. 표는 Metrics 값이 전후로 하나라도 다를 때만 넣는다. 추정 행은 양쪽 값이 있을 때만 넣는다. Low Finding은 코멘트에 넣지 않는다.
 
 ```
@@ -1203,7 +1205,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 10. 코멘트 전에 `PullRequest`를 다시 읽는다. 현재 head SHA가 페이로드의 `head_sha`와 다르면 코멘트 단계를 건너뛴다.
 11. 코멘트 대상 ID는 `pr_comments` 캐시를 먼저 보고, 없으면 `IssueComments` 중 본문이 `CommentMarker`로 시작하고 작성자 login이 `{app slug}[bot]`인 것을 찾는다(App slug는 `App()` 결과를 프로세스 수명 동안 캐시).
     - `Publishable`이면 있으면 수정, 없으면 생성하고 캐시에 기록한다.
-    - 아니면서 기존 코멘트가 있으면 `report.NoChanges(head_sha)`로 수정한다.
+    - 아니면서 기존 코멘트가 있으면, 분석한 파일의 Finding이 Low 포함 0개일 때는 `report.NoChanges(head_sha)`, 하나 이상일 때는 `report.BelowThreshold(head_sha)`로 수정한다. 게시 기준 미달 변경이 남은 PR에 "변화 없음"이라고 쓰면 거짓 안심이 되기 때문이다.
     - 아니면서 기존 코멘트가 없으면 아무것도 하지 않는다.
 12. `SaveAnalysis`로 저장한다.
 
@@ -1222,7 +1224,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 ### 15.6 테스트
 
 - 웹: 서명 없음·오류·정상, 필수 헤더 누락, 딜리버리 중복, 이벤트별 enqueue 결과, 비공개 저장소 무시, 본문 크기 초과.
-- 워커 핸들러: 가짜 GitHub(`httptest`)와 실제 store(`QUANTO_TEST_DATABASE_URL` 필요)로 검증한다. PR을 연 뒤 base 브랜치가 같은 워크플로를 바꾼 상황에서 base 쪽 변경이 Finding에 나오지 않음(merge-base), 재시도가 Check Run을 새로 만들지 않고 어노테이션을 이어 올림, 핸들러 타임아웃, lost lease(`Complete`·`Fail`·`Defer`·`Kill` 네 경로 각각: 이전 소유자의 결과 기록이 상태·`attempts`·`last_error`·`run_after`·`locked_at`를 바꾸지 않고 `quanto_queue_jobs_total`을 올리지 않음. 같은 입력이 펜싱 없이는 의도한 경로를 타는지 대조 테스트로 확인. `attempts` 5에서 잃은 lease의 `Fail`이 dead로 보내지 않음), 워크플로 변경 없음, 수정·추가·삭제·이름 변경, head 이동 시 코멘트 생략, 기존 코멘트 수정, 변화 없음으로 바뀐 경우의 문구, 어노테이션 51개 이상의 배치, 레이트 리밋 Defer, 이력 수집 필터링과 통계 재계산.
+- 워커 핸들러: 가짜 GitHub(`httptest`)와 실제 store(`QUANTO_TEST_DATABASE_URL` 필요)로 검증한다. PR을 연 뒤 base 브랜치가 같은 워크플로를 바꾼 상황에서 base 쪽 변경이 Finding에 나오지 않음(merge-base), 재시도가 Check Run을 새로 만들지 않고 어노테이션을 이어 올림, 핸들러 타임아웃, lost lease(`Complete`·`Fail`·`Defer`·`Kill` 네 경로 각각: 이전 소유자의 결과 기록이 상태·`attempts`·`last_error`·`run_after`·`locked_at`를 바꾸지 않고 `quanto_queue_jobs_total`을 올리지 않음. 같은 입력이 펜싱 없이는 의도한 경로를 타는지 대조 테스트로 확인. `attempts` 5에서 잃은 lease의 `Fail`이 dead로 보내지 않음), 워크플로 변경 없음, 수정·추가·삭제·이름 변경, head 이동 시 코멘트 생략, 기존 코멘트 수정, 변화 없음으로 바뀐 경우의 문구와 게시 기준 미달 변경만 남은 경우의 문구 구분, 어노테이션 51개 이상의 배치, 레이트 리밋 Defer, 이력 수집 필터링과 통계 재계산.
 - **종단 테스트** `internal/app/e2e_test.go`: 서명된 `pull_request` 웹훅 → web 핸들러 → 큐 → 워커 한 사이클 → 가짜 GitHub가 받은 Check Run 페이로드와 코멘트 본문을 골든 파일과 비교한다.
 
 ---

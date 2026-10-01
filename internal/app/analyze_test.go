@@ -57,6 +57,24 @@ func TestNoChangeBody(t *testing.T) {
 	}
 }
 
+func TestBelowThresholdBody(t *testing.T) {
+	want := "<!-- quanto:summary -->\n## quanto\n\nNo changes that meet the comment threshold as of commit `1111111`. Details are in the quanto check run.\n"
+	if got := report.BelowThreshold(testHead); got != want {
+		t.Fatalf("BelowThreshold = %q", got)
+	}
+	if report.BelowThreshold(testHead) == report.NoChanges(testHead) {
+		t.Fatal("below-threshold body equals no-changes body")
+	}
+}
+
+func setupBelowThreshold(h *harness) {
+	before := readFixture(h.t, fixtureDir+"action-major-bump/before.yml")
+	after := readFixture(h.t, fixtureDir+"action-major-bump/after.yml")
+	h.gh.files = []github.PullRequestFile{{Filename: ciPath, Status: "modified"}}
+	h.gh.setContent(testBase, ciPath, before)
+	h.gh.setContent(testHead, ciPath, after)
+}
+
 func setupModified(h *harness) {
 	before := readFixture(h.t, fixtureDir+"matrix-axis-added/before.yml")
 	after := readFixture(h.t, fixtureDir+"matrix-axis-added/after.yml")
@@ -305,6 +323,35 @@ func TestAnalyzeNoChangeUpdatesExistingComment(t *testing.T) {
 	checks := h.gh.find("POST", "/check-runs")
 	if !strings.Contains(checks[0].Body, `"title":"No execution changes"`) {
 		t.Fatalf("check run = %s", checks[0].Body)
+	}
+}
+
+func TestAnalyzeBelowThresholdUpdatesExistingComment(t *testing.T) {
+	h := newHarness(t, nil)
+	h.seedRepo()
+	setupBelowThreshold(h)
+	h.gh.comments = []github.IssueComment{{ID: 12, Body: report0("old findings"), User: github.User{Login: botLogin}}}
+	h.enqueue(KindAnalyzePR, analyzePayload())
+	h.runOne()
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments, updateComment(12)})
+	if got := h.gh.comments[0].Body; got != report.BelowThreshold(testHead) {
+		t.Fatalf("comment = %q", got)
+	}
+	checks := h.gh.find("POST", "/check-runs")
+	if !strings.Contains(checks[0].Body, `"title":"1 execution change"`) {
+		t.Fatalf("check run = %s", checks[0].Body)
+	}
+}
+
+func TestAnalyzeBelowThresholdWithoutCommentDoesNothing(t *testing.T) {
+	h := newHarness(t, nil)
+	h.seedRepo()
+	setupBelowThreshold(h)
+	h.enqueue(KindAnalyzePR, analyzePayload())
+	h.runOne()
+	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments})
+	if len(h.gh.comments) != 0 {
+		t.Fatalf("comments = %+v", h.gh.comments)
 	}
 }
 

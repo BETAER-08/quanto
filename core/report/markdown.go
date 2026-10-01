@@ -185,3 +185,7 @@ func CheckSummary(diffs []*semdiff.FileDiff, meta Meta) (string, string) {
 func NoChanges(headSHA string) string {
 	return CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit " + inline(shortSHA(headSHA)) + ".\n"
 }
+
+func BelowThreshold(headSHA string) string {
+	return CommentMarker + "\n## quanto\n\nNo changes that meet the comment threshold as of commit " + inline(shortSHA(headSHA)) + ". Details are in the quanto check run.\n"
+}

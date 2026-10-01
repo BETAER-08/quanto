@@ -260,6 +260,15 @@ func (a *App) findComment(ctx context.Context, client *github.Client, p AnalyzeP
 	return 0, false, nil
 }
 
+func hasFindings(diffs []*semdiff.FileDiff) bool {
+	for _, d := range diffs {
+		if d != nil && len(d.Findings) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func isNotFound(err error) bool {
 	var apiErr *github.APIError
 	return errors.As(err, &apiErr) && apiErr.Status == http.StatusNotFound
@@ -268,8 +277,11 @@ func isNotFound(err error) bool {
 func (a *App) publishComment(ctx context.Context, client *github.Client, p AnalyzePayload, diffs []*semdiff.FileDiff, meta report.Meta) error {
 	publishable := report.Publishable(diffs)
 	body := report.NoChanges(p.HeadSHA)
-	if publishable {
+	switch {
+	case publishable:
 		body = report.Markdown(diffs, meta)
+	case hasFindings(diffs):
+		body = report.BelowThreshold(p.HeadSHA)
 	}
 	id, ok, err := a.store.CommentID(ctx, p.RepositoryID, p.Number)
 	if err != nil {
