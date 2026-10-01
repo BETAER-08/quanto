@@ -3,12 +3,12 @@ package source
 import "fmt"
 
 type Position struct {
-	File      string
-	Line      int
-	Column    int
-	EndLine   int
-	EndColumn int
-	Path      string
+	File      string `json:"file"`
+	Line      int    `json:"line"`
+	Column    int    `json:"column"`
+	EndLine   int    `json:"end_line"`
+	EndColumn int    `json:"end_column"`
+	Path      string `json:"path"`
 }
 
 func (p Position) Valid() bool {
@@ -64,8 +64,8 @@ func (p Position) String() string {
 }
 
 type Positioned[T any] struct {
-	Value T
-	Pos   Position
+	Value T        `json:"value"`
+	Pos   Position `json:"pos"`
 }
 
 func At[T any](v T, pos Position) Positioned[T] {

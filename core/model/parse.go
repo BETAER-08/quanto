@@ -43,6 +43,7 @@ func Parse(doc *source.Document) (*Workflow, []Diagnostic, error) {
 	w.EnvKeys = sortedKeys(root.Field("env"))
 	w.SecretRefs = secretRefs(root)
 	jobs := root.Field("jobs")
+	w.JobsPos = root.FieldKey("jobs").Pos()
 	if jobs.Kind() != source.KindMapping || jobs.Len() == 0 {
 		pos := root.Pos()
 		if jobs.Exists() {

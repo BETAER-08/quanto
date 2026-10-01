@@ -236,6 +236,16 @@ func TestJobsOrderPreserved(t *testing.T) {
 	if start(w.Jobs[0].Pos) != at(3, 3) {
 		t.Errorf("job pos = %v", w.Jobs[0].Pos)
 	}
+	if start(w.JobsPos) != at(2, 1) || w.JobsPos.EndColumn != 4 {
+		t.Errorf("jobs key pos = %v", w.JobsPos)
+	}
+}
+
+func TestJobsPosAbsent(t *testing.T) {
+	w, _ := parse(t, "on: push\nname: x\n")
+	if w.JobsPos.Valid() {
+		t.Errorf("jobs key pos = %v, want zero", w.JobsPos)
+	}
 }
 
 func TestNeeds(t *testing.T) {

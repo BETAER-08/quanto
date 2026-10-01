@@ -36,6 +36,7 @@ type Workflow struct {
 	EnvKeys     []string
 	SecretRefs  []string
 	Jobs        []*Job
+	JobsPos     source.Position
 	Pos         source.Position
 }
 
