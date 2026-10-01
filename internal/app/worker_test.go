@@ -114,22 +114,122 @@ func TestDefaultHandlerTimeout(t *testing.T) {
 	}
 }
 
+type leaseCase struct {
+	name   string
+	kind   string
+	setup  func(h *harness) any
+	result string
+	status string
+	hit    string
+}
+
+func leaseCases() []leaseCase {
+	return []leaseCase{
+		{"complete", KindIngestWorkflowRun, func(h *harness) any {
+			return IngestPayload{InstallationID: 7, RepositoryID: 42, Owner: testOwner, Repo: testRepo, RunID: 1, WorkflowPath: "other/path.yml"}
+		}, metrics.ResultDone, "done", ""},
+		{"fail", KindAnalyzePR, func(h *harness) any {
+			setupModified(h)
+			h.gh.broken[filesEndpoint] = true
+			return analyzePayload()
+		}, metrics.ResultFailed, "pending", filesEndpoint},
+		{"defer", KindAnalyzePR, func(h *harness) any {
+			setupModified(h)
+			h.gh.limited[filesEndpoint] = true
+			return analyzePayload()
+		}, metrics.ResultDeferred, "pending", filesEndpoint},
+		{"kill", "mystery", func(h *harness) any {
+			return map[string]any{}
+		}, metrics.ResultDead, "dead", ""},
+	}
+}
+
+func (h *harness) hits(endpoint string) int {
+	n := 0
+	for _, e := range h.gh.endpoints() {
+		if e == endpoint {
+			n++
+		}
+	}
+	return n
+}
+
+func TestLeaseCasesTakeIntendedPath(t *testing.T) {
+	for _, tc := range leaseCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, nil)
+			h.seedRepo()
+			h.enqueue(tc.kind, tc.setup(h))
+			h.runOne()
+			if got := h.queue()[0].Status; got != tc.status {
+				t.Fatalf("status = %s, want %s", got, tc.status)
+			}
+			if got := testutil.ToFloat64(h.metrics.QueueJobs.WithLabelValues(tc.kind, tc.result)); got != 1 {
+				t.Fatalf("%s metric = %v", tc.result, got)
+			}
+			if tc.hit != "" && h.hits(tc.hit) == 0 {
+				t.Fatalf("handler did not call %s", tc.hit)
+			}
+		})
+	}
+}
+
 func TestLostLeaseDiscardsResult(t *testing.T) {
+	for _, tc := range leaseCases() {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t, nil)
+			h.seedRepo()
+			h.enqueue(tc.kind, tc.setup(h))
+			job, err := h.store.Dequeue(context.Background())
+			if err != nil || job == nil {
+				t.Fatalf("dequeue: %v, %v", job, err)
+			}
+			if _, err := h.db.Exec(context.Background(), "UPDATE queue_jobs SET attempts = attempts + 1, locked_at = now(), run_after = now() - interval '1 minute'"); err != nil {
+				t.Fatalf("simulate takeover: %v", err)
+			}
+			before := expectJob(t, h, "running", 2)
+			h.app.process(context.Background(), job)
+			if tc.hit != "" && h.hits(tc.hit) == 0 {
+				t.Fatalf("handler did not call %s", tc.hit)
+			}
+			after := expectJob(t, h, "running", 2)
+			if after.LastError != "" || after.Delay > before.Delay+1 {
+				t.Fatalf("former owner changed the job: before %+v after %+v", before, after)
+			}
+			var locked bool
+			if err := h.db.QueryRow(context.Background(), "SELECT locked_at IS NOT NULL FROM queue_jobs").Scan(&locked); err != nil || !locked {
+				t.Fatalf("lease cleared: %v, %v", locked, err)
+			}
+			for _, result := range []string{metrics.ResultDone, metrics.ResultFailed, metrics.ResultDeferred, metrics.ResultDead} {
+				if got := testutil.ToFloat64(h.metrics.QueueJobs.WithLabelValues(tc.kind, result)); got != 0 {
+					t.Fatalf("%s metric = %v", result, got)
+				}
+			}
+		})
+	}
+}
+
+func TestLostLeaseAtMaxAttemptsDoesNotKill(t *testing.T) {
 	h := newHarness(t, nil)
 	h.seedRepo()
-	h.enqueue(KindIngestWorkflowRun, IngestPayload{InstallationID: 7, RepositoryID: 42, Owner: testOwner, Repo: testRepo, RunID: 1, WorkflowPath: "other/path.yml"})
+	setupModified(h)
+	h.gh.broken[filesEndpoint] = true
+	h.enqueue(KindAnalyzePR, analyzePayload())
+	if _, err := h.db.Exec(context.Background(), "UPDATE queue_jobs SET attempts = 4"); err != nil {
+		t.Fatalf("seed attempts: %v", err)
+	}
 	job, err := h.store.Dequeue(context.Background())
-	if err != nil || job == nil {
-		t.Fatalf("dequeue: %v, %v", job, err)
+	if err != nil || job == nil || job.Attempts != 5 {
+		t.Fatalf("dequeue: %+v, %v", job, err)
 	}
 	if _, err := h.db.Exec(context.Background(), "UPDATE queue_jobs SET attempts = attempts + 1, locked_at = now()"); err != nil {
 		t.Fatalf("simulate takeover: %v", err)
 	}
 	h.app.process(context.Background(), job)
-	expectJob(t, h, "running", 2)
-	for _, result := range []string{metrics.ResultDone, metrics.ResultFailed, metrics.ResultDeferred, metrics.ResultDead} {
-		if got := testutil.ToFloat64(h.metrics.QueueJobs.WithLabelValues(KindIngestWorkflowRun, result)); got != 0 {
-			t.Fatalf("%s metric = %v", result, got)
-		}
+	if job := expectJob(t, h, "running", 6); job.LastError != "" {
+		t.Fatalf("last_error = %q", job.LastError)
+	}
+	if got := testutil.ToFloat64(h.metrics.QueueJobs.WithLabelValues(KindAnalyzePR, metrics.ResultDead)); got != 0 {
+		t.Fatalf("dead metric = %v", got)
 	}
 }

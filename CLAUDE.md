@@ -1195,7 +1195,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 ### 15.6 테스트
 
 - 웹: 서명 없음·오류·정상, 필수 헤더 누락, 딜리버리 중복, 이벤트별 enqueue 결과, 비공개 저장소 무시, 본문 크기 초과.
-- 워커 핸들러: 가짜 GitHub(`httptest`)와 실제 store(`QUANTO_TEST_DATABASE_URL` 필요)로 검증한다. PR을 연 뒤 base 브랜치가 같은 워크플로를 바꾼 상황에서 base 쪽 변경이 Finding에 나오지 않음(merge-base), 재시도가 Check Run을 새로 만들지 않고 어노테이션을 이어 올림, 핸들러 타임아웃, lost lease, 워크플로 변경 없음, 수정·추가·삭제·이름 변경, head 이동 시 코멘트 생략, 기존 코멘트 수정, 변화 없음으로 바뀐 경우의 문구, 어노테이션 51개 이상의 배치, 레이트 리밋 Defer, 이력 수집 필터링과 통계 재계산.
+- 워커 핸들러: 가짜 GitHub(`httptest`)와 실제 store(`QUANTO_TEST_DATABASE_URL` 필요)로 검증한다. PR을 연 뒤 base 브랜치가 같은 워크플로를 바꾼 상황에서 base 쪽 변경이 Finding에 나오지 않음(merge-base), 재시도가 Check Run을 새로 만들지 않고 어노테이션을 이어 올림, 핸들러 타임아웃, lost lease(`Complete`·`Fail`·`Defer`·`Kill` 네 경로 각각: 이전 소유자의 결과 기록이 상태·`attempts`·`last_error`·`run_after`·`locked_at`를 바꾸지 않고 `quanto_queue_jobs_total`을 올리지 않음. 같은 입력이 펜싱 없이는 의도한 경로를 타는지 대조 테스트로 확인. `attempts` 5에서 잃은 lease의 `Fail`이 dead로 보내지 않음), 워크플로 변경 없음, 수정·추가·삭제·이름 변경, head 이동 시 코멘트 생략, 기존 코멘트 수정, 변화 없음으로 바뀐 경우의 문구, 어노테이션 51개 이상의 배치, 레이트 리밋 Defer, 이력 수집 필터링과 통계 재계산.
 - **종단 테스트** `internal/app/e2e_test.go`: 서명된 `pull_request` 웹훅 → web 핸들러 → 큐 → 워커 한 사이클 → 가짜 GitHub가 받은 Check Run 페이로드와 코멘트 본문을 골든 파일과 비교한다.
 
 ---
