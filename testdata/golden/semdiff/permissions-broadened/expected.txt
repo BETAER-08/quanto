@@ -1,0 +1,2 @@
+.github/workflows/ci.yml (modified)
+  - [high] `contents` permission (workflow): `read` → `write`

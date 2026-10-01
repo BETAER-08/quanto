@@ -1,0 +1,5 @@
+.github/workflows/ci.yml (unanalyzable)
+  Jobs per run: 1 → —
+  Longest `needs` chain: 1 → —
+  Max concurrent jobs: 1 → —
+  - [normal] Could not analyze: .github/workflows/ci.yml:4: did not find expected ',' or ']'

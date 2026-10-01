@@ -1,0 +1,3 @@
+.github/workflows/ci.yml (modified)
+  - [high] Job `deploy` passes all secrets to `./.github/workflows/deploy.yml` (`secrets: inherit`)
+  - [normal] New secret referenced: `NPM_TOKEN`

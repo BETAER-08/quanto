@@ -1,0 +1,2 @@
+.github/workflows/ci.yml (modified)
+  - [high] `permissions` removed from workflow; repository default applies

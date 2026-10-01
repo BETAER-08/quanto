@@ -1,0 +1,2 @@
+.github/workflows/ci.yml (modified)
+  - [normal] Schedule: (none) → '0 * * * *' (24 runs/day)

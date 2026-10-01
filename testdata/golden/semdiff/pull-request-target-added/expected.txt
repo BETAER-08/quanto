@@ -1,0 +1,2 @@
+.github/workflows/ci.yml (modified)
+  - [high] Trigger added: `pull_request_target` (runs with base repository permissions and secrets)

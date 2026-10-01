@@ -1,0 +1,2 @@
+.github/workflows/ci.yml (modified)
+  - [high] `permissions: write-all` set on workflow
