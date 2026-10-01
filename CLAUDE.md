@@ -1064,6 +1064,8 @@ CREATE TABLE job_stats (
 );
 ```
 
+`0002_job_runs_completed_at.sql`은 `CREATE INDEX job_runs_completed_at ON job_runs (completed_at);` 한 줄이다. `PruneJobRuns`가 매시간 `completed_at` 조건으로 삭제할 때 전체 스캔을 피하기 위해서다.
+
 `analyses.result`에는 `report.JSON`의 결과만 저장한다. 워크플로 원문은 어떤 테이블에도 저장하지 않는다.
 
 ### 14.2 큐 연산
@@ -1098,14 +1100,14 @@ func (s *Store) PendingCount(ctx) (int64, error)
 
 ### 14.3 기타 연산
 
-`DeliverySeen(ctx, id) (bool, error)`, `RecordDelivery(ctx, id, event) error` (`ON CONFLICT DO NOTHING`), `PruneDeliveries(ctx, olderThan)`, `UpsertInstallation`, `DeleteInstallation`, `SetInstallationSuspended`, `InstallationSuspended`, `UpsertRepositories`, `RemoveRepositories`, `SaveAnalysis` (`ON CONFLICT (repository_id, pr_number, head_sha) DO UPDATE`), `CommentID`, `SetCommentID`, `InsertJobRuns` (`ON CONFLICT DO NOTHING`), `RecomputeJobStats(ctx, repoID, workflowPath, jobKey)`, `Durations(repoID) semdiff.DurationSource`.
+`PruneJobRuns(ctx, olderThan) (int64, error)` (`completed_at`이 기준보다 오래된 `job_runs` 행 삭제. `job_stats`는 다음 수집 때 다시 계산되며 삭제 시점에는 건드리지 않는다), `DeliverySeen(ctx, id) (bool, error)`, `RecordDelivery(ctx, id, event) error` (`ON CONFLICT DO NOTHING`), `PruneDeliveries(ctx, olderThan)`, `UpsertInstallation`, `DeleteInstallation`, `SetInstallationSuspended`, `InstallationSuspended`, `UpsertRepositories`, `RemoveRepositories`, `SaveAnalysis` (`ON CONFLICT (repository_id, pr_number, head_sha) DO UPDATE`), `CommentID`, `SetCommentID`, `InsertJobRuns` (`ON CONFLICT DO NOTHING`), `RecomputeJobStats(ctx, repoID, workflowPath, jobKey)`, `Durations(repoID) semdiff.DurationSource`.
 
 - `RecomputeJobStats`: 해당 키의 `conclusion = 'success'` 최신 30건으로 평균, `percentile_cont(0.5)`, 개수를 계산해 upsert한다.
 - `Durations`: 저장소 하나의 `job_stats`를 한 번에 읽어 메모리 맵으로 된 `DurationSource`를 만든다. `JobAverage`는 `avg_seconds`와 `sample_count`를 반환한다.
 
 ### 14.4 테스트
 
-`QUANTO_TEST_DATABASE_URL`이 없으면 skip한다. 테스트마다 무작위 이름의 스키마를 만들어 `search_path`로 격리하고 끝나면 삭제한다. 클라우드 세션에서 DB를 띄울 수 없으면, 통합 테스트는 푸시 후 GitHub Actions의 `integration` 잡에서 실행된 결과로 검증한다. 검증 항목: 마이그레이션 멱등성, 동시 마이그레이션(고루틴 두 개), 큐 중복 키, 동시 Dequeue에서 같은 작업을 두 번 잡지 않음(고루틴 8개 × 작업 100개), Fail 백오프와 dead 전이, Kill, Defer의 attempts 복구, ReapStale, reap 후 이전 소유자의 Complete·Fail·Defer·Kill이 `ErrLeaseLost`를 받고 새 실행 상태를 바꾸지 않음, reap 5회 후 dead, PruneQueue, 딜리버리 중복, 통계 재계산, cascade 삭제.
+`QUANTO_TEST_DATABASE_URL`이 없으면 skip한다. 테스트마다 무작위 이름의 스키마를 만들어 `search_path`로 격리하고 끝나면 삭제한다. 클라우드 세션에서 DB를 띄울 수 없으면, 통합 테스트는 푸시 후 GitHub Actions의 `integration` 잡에서 실행된 결과로 검증한다. 검증 항목: 마이그레이션 멱등성, 동시 마이그레이션(고루틴 두 개), 큐 중복 키, 동시 Dequeue에서 같은 작업을 두 번 잡지 않음(고루틴 8개 × 작업 100개), Fail 백오프와 dead 전이, Kill, Defer의 attempts 복구, ReapStale, reap 후 이전 소유자의 Complete·Fail·Defer·Kill이 `ErrLeaseLost`를 받고 새 실행 상태를 바꾸지 않음, reap 5회 후 dead, PruneQueue, PruneJobRuns(90일 경계)와 `job_runs_completed_at` 인덱스 존재, 딜리버리 중복, 통계 재계산, cascade 삭제.
 
 ---
 
@@ -1141,7 +1143,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 ### 15.2 worker 역할
 
 - `QUANTO_WORKER_CONCURRENCY`개 고루틴이 `Dequeue`를 반복한다. 비어 있으면 1초 + 0~250ms 지터만큼 쉰다.
-- 1분마다 `ReapStale(10m)`, 1시간마다 `PruneDeliveries(7일)`, `PruneQueue(7일, 30일)`, 설치 토큰 캐시 `PruneTokens()`, 15초마다 큐 깊이 게이지를 갱신한다.
+- 1분마다 `ReapStale(10m)`, 1시간마다 `PruneDeliveries(7일)`, `PruneQueue(7일, 30일)`, `PruneJobRuns(90일)`, 설치 토큰 캐시 `PruneTokens()`, 15초마다 큐 깊이 게이지를 갱신한다.
 - 핸들러는 `recover`로 감싼다. 패닉은 Fail로 기록한다.
 - 핸들러 호출마다 `context.WithTimeout(5분)`을 건다. 타임아웃은 Fail이다(`ReapStale`의 10분보다 짧아야 한다). 종료 신호로 인한 취소만 `Defer(now)`다.
 - `Complete`·`Fail`·`Defer`·`Kill`이 `store.ErrLeaseLost`를 반환하면 에러가 아니라 `lost lease` 경고 로그만 남기고, `quanto_queue_jobs_total`을 올리지 않는다.

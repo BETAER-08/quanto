@@ -14,7 +14,7 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first migrate: %v", err)
 	}
-	if len(first) != 1 || first[0] != "0001_init.sql" {
+	if len(first) != 2 || first[0] != "0001_init.sql" || first[1] != "0002_job_runs_completed_at.sql" {
 		t.Fatalf("first migrate applied %v", first)
 	}
 	second, err := s.Migrate(ctx)
@@ -28,7 +28,7 @@ func TestMigrateIdempotent(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&n); err != nil {
 		t.Fatalf("count: %v", err)
 	}
-	if n != 1 {
+	if n != 2 {
 		t.Fatalf("schema_migrations rows = %d", n)
 	}
 }
@@ -55,7 +55,7 @@ func TestMigrateConcurrent(t *testing.T) {
 		}
 		total += len(results[i])
 	}
-	if total != 1 {
+	if total != 2 {
 		t.Fatalf("applied %d migrations in total, results %v", total, results)
 	}
 }

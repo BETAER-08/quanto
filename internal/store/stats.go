@@ -45,6 +45,14 @@ ON CONFLICT DO NOTHING`,
 	return nil
 }
 
+func (s *Store) PruneJobRuns(ctx context.Context, olderThan time.Duration) (int64, error) {
+	tag, err := s.pool.Exec(ctx, "DELETE FROM job_runs WHERE completed_at < now() - make_interval(secs => $1)", olderThan.Seconds())
+	if err != nil {
+		return 0, fmt.Errorf("store: prune job runs: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (s *Store) RecomputeJobStats(ctx context.Context, repositoryID int64, workflowPath, jobKey string) error {
 	tag, err := s.pool.Exec(ctx, `WITH recent AS (
     SELECT duration_seconds FROM job_runs

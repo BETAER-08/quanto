@@ -23,6 +23,7 @@ const (
 	deliveryRetention = 7 * 24 * time.Hour
 	doneRetention     = 7 * 24 * time.Hour
 	deadRetention     = 30 * 24 * time.Hour
+	jobRunRetention   = 90 * 24 * time.Hour
 	depthInterval     = 15 * time.Second
 	drainTimeout      = 60 * time.Second
 	recordTimeout     = 10 * time.Second
@@ -195,6 +196,11 @@ func (a *App) maintain(ctx context.Context) {
 				a.logMaintenance(ctx, "prune queue", err)
 			} else if n > 0 {
 				a.logger.Info("pruned queue jobs", "count", n)
+			}
+			if n, err := a.store.PruneJobRuns(ctx, jobRunRetention); err != nil {
+				a.logMaintenance(ctx, "prune job runs", err)
+			} else if n > 0 {
+				a.logger.Info("pruned job runs", "count", n)
 			}
 			if a.github != nil {
 				if n := a.github.PruneTokens(); n > 0 {

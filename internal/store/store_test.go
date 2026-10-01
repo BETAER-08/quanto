@@ -225,3 +225,45 @@ func TestOpenInvalidURL(t *testing.T) {
 		t.Fatalf("error = %q", got)
 	}
 }
+
+func TestPruneJobRuns(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	seedRepo(t, s, 1, 10)
+	now := time.Now().UTC()
+	ages := []time.Duration{91 * 24 * time.Hour, 89 * 24 * time.Hour, time.Hour}
+	var runs []JobRun
+	for i, age := range ages {
+		done := now.Add(-age)
+		runs = append(runs, JobRun{JobID: int64(i + 1), RepositoryID: 10, RunID: 1, WorkflowPath: "p", JobKey: "k", Conclusion: "success", StartedAt: done.Add(-time.Minute), CompletedAt: done, DurationSeconds: 60})
+	}
+	if err := s.InsertJobRuns(ctx, runs); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	n, err := s.PruneJobRuns(ctx, 90*24*time.Hour)
+	if err != nil || n != 1 {
+		t.Fatalf("prune = %d, %v", n, err)
+	}
+	var ids []int64
+	rows, err := s.pool.Query(ctx, "SELECT job_id FROM job_runs ORDER BY job_id")
+	if err != nil {
+		t.Fatalf("query: %v", err)
+	}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows: %v", err)
+	}
+	if len(ids) != 2 || ids[0] != 2 || ids[1] != 3 {
+		t.Fatalf("remaining = %v", ids)
+	}
+	var indexed bool
+	if err := s.pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'job_runs_completed_at' AND schemaname = current_schema())").Scan(&indexed); err != nil || !indexed {
+		t.Fatalf("completed_at index = %v, %v", indexed, err)
+	}
+}
