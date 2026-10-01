@@ -1,0 +1,30 @@
+{
+  "name": "quanto",
+  "head_sha": "1111111111111111111111111111111111111111",
+  "status": "completed",
+  "conclusion": "neutral",
+  "output": {
+    "title": "2 execution changes",
+    "summary": "## quanto\n\nExecution changes in 1 workflow file.\n\n### `.github/workflows/ci.yml`\n\n| Metric | Before | After |\n|---|---:|---:|\n| Jobs per run | 7 | 25 |\n| Longest `needs` chain | 1 | 1 |\n| Max concurrent jobs | 7 | 25 |\n\n- Job `test` matrix: 6 → 24 jobs\n- Max concurrent jobs: 7 → 25\n\n---\n\u003csub\u003eStatic analysis of workflow files only. No code from this pull request was executed. Commit `1111111`.\u003c/sub\u003e\n",
+    "annotations": [
+      {
+        "path": ".github/workflows/ci.yml",
+        "start_line": 13,
+        "end_line": 15,
+        "annotation_level": "notice",
+        "title": "matrix.count_changed",
+        "message": "Job `test` matrix: 6 → 24 jobs"
+      },
+      {
+        "path": ".github/workflows/ci.yml",
+        "start_line": 3,
+        "end_line": 3,
+        "start_column": 1,
+        "end_column": 4,
+        "annotation_level": "notice",
+        "title": "graph.width_changed",
+        "message": "Max concurrent jobs: 7 → 25"
+      }
+    ]
+  }
+}
