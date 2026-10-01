@@ -374,6 +374,41 @@ CLAUDE.md 21절 형식에 최종 감사 표를 붙여 보고하고 멈춰라.
 
 ---
 
+## Phase 9 — GitHub Action 배포 형태
+
+```
+CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 9만 수행한다.
+
+[절대 조건]
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음마다 `phase 9: <요약>`으로 커밋하고 main에 푸시한다. 커밋은 make check 종료 코드가 0일 때만 한다. 브랜치·PR·force 푸시는 쓰지 않는다.
+- CLAUDE.md 0절의 절대 규칙을 전부 지킨다.
+- App 코드(internal/app, internal/store)는 지우지 않는다. App의 동작과 골든은 바뀌지 않아야 한다.
+
+[선행 확인]
+- 최신 main에서 시작한다. make check가 통과하는지 먼저 확인한다.
+
+[이번 페이즈의 산출물 — CLAUDE.md 23절]
+1. internal/analysis — analyze_pr의 "PR 파일 목록 → merge-base·head 파일 읽기 → semdiff.Compare"를 추출. GitHub 접근은 인터페이스. App이 이 패키지를 쓰도록 바꾼다.
+2. internal/github — NewTokenClient, WorkflowFileRuns
+3. internal/action과 quanto action 서브커맨드
+4. action.yml (composite, 릴리스 바이너리 sha256 검증, 로컬 액션은 go build)
+5. .github/workflows/release.yml (5개 조합 크로스 컴파일, checksums.txt, attest-build-provenance, SHA 고정)
+6. .github/workflows/quanto.yml (도그푸딩, uses: ./)
+7. 테스트: internal/analysis, internal/action(httptest, e2e 골든), FuzzCommand. CI와 Makefile fuzz에 FuzzCommand 추가
+8. README 맨 앞을 Action 사용법으로 교체, App 자체 호스팅은 "고급" 절로
+
+[검증]
+- make check (QUANTO_TEST_DATABASE_URL을 설정할 수 있으면 설정한 상태로)
+- go test -run '^$' -fuzz FuzzCommand -fuzztime 60s ./internal/action/
+- action.yml 설치 스크립트를 가짜 릴리스 디렉터리로 실행해 checksum 일치·불일치를 확인한다
+- 푸시 후 GitHub Actions 결과와 도그푸딩 워크플로 실행 여부를 확인한다
+
+[종료]
+CLAUDE.md 21절 형식으로 보고하고 멈춰라.
+```
+
+---
+
 ## 검수
 
 ```

@@ -29,7 +29,7 @@
 
 ## 1. 제품 정의
 
-quanto는 GitHub App이다. PR이 `.github/workflows/*.yml` 또는 `*.yaml`을 변경하면, 변경 전후 워크플로를 **실행 모델**로 해석해서 무엇이 달라지는지를 수치와 사실로 보고한다.
+quanto는 GitHub App이자 GitHub Action(23절)이다. PR이 `.github/workflows/*.yml` 또는 `*.yaml`을 변경하면, 변경 전후 워크플로를 **실행 모델**로 해석해서 무엇이 달라지는지를 수치와 사실로 보고한다.
 
 보고 대상의 예는 다음과 같다. 매트릭스 조합 수 6 → 24, `needs` 체인 길이, 최대 동시 잡 수, `permissions` 확대, 신규 서드파티 액션, SHA 고정 해제, 트리거 추가, 스케줄 빈도, 과거 실행 이력 기반 러너 시간 추정.
 
@@ -58,16 +58,21 @@ internal/github/            GitHub REST 클라이언트, App JWT
 internal/store/             PostgreSQL, 마이그레이션, 큐
 internal/store/migrations/  *.sql
 internal/app/               web 역할, worker 역할, 작업 핸들러
+internal/analysis/          PR 워크플로 파일 읽기·비교 (App과 Action 공용, 23절)
+internal/action/            quanto action 서브커맨드 (23절)
 internal/metrics/           Prometheus 수집기
 testdata/golden/            골든 파일
 testdata/corpus/            실제 워크플로 (gitignore, 스크립트로 수집)
 scripts/fetch-corpus.sh
 scripts/check-comments.go
+action.yml
 deploy/Containerfile
 deploy/.containerignore
 deploy/quadlet/
 docs/
 .github/workflows/ci.yml
+.github/workflows/release.yml
+.github/workflows/quanto.yml
 Makefile
 ```
 
@@ -95,7 +100,7 @@ Makefile
 - 식별자와 코드는 영어로 쓴다. 사용자에게 보이는 출력(PR 코멘트, Check Run, CLI)도 영어로 쓴다.
 - 테스트는 표준 `testing`만 쓴다. 테이블 주도 테스트를 기본으로 한다.
 - 골든 파일 테스트는 패키지별 `-update` 플래그(`flag.Bool("update", ...)`)로 갱신한다.
-- 퍼즈 테스트 대상: `core/source.Load`, `core/expr.ParseTemplate`, `core/matrix.Expand`, `core/semdiff.Compare`.
+- 퍼즈 테스트 대상: `core/source.Load`, `core/expr.ParseTemplate`, `core/matrix.Expand`, `core/semdiff.Compare`, `internal/action`의 워크플로 명령 생성(`FuzzCommand`).
 
 ---
 
@@ -929,6 +934,7 @@ Execution changes in 1 workflow file.
 | `quanto serve --role web\|worker\|all` | 페이즈 6에서 추가 |
 | `quanto migrate` | 페이즈 6에서 추가 |
 | `quanto manifest --webhook-url <url> --homepage-url <url> [--name quanto]` | 페이즈 7에서 추가. GitHub App manifest JSON 출력 |
+| `quanto action` | 페이즈 9에서 추가. GitHub Action 진입점(23절). 인자를 받지 않는다 |
 
 `inspect`의 텍스트 출력은 사용자 유래 문자열(파일 경로, 워크플로 이름, 이벤트 이름, 필터 값, cron, 입력 이름, 권한 주체·스코프 이름·`read-all`/`write-all` 값, 잡 ID, runs-on 표기, needs, 잡 `uses`, 액션 Identity와 ref, 진단 메시지)을 값 하나씩 `report.Plain`으로 출력한다. 구조 문구와 계산된 값(인스턴스 수, 레벨, 분류, 고정 진단 코드)은 그대로 쓴다. JSON 출력은 `encoding/json`의 이스케이프에 맡긴다. 테스트는 제어 문자를 넣은 워크플로로 출력에 C0·DEL·C1 rune이 없음을 검증한다.
 
@@ -1257,7 +1263,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 - `quanto manifest`: GitHub App manifest JSON을 출력한다. `default_permissions`: `contents: read`, `checks: write`, `pull_requests: write`, `actions: read`, `metadata: read`. `default_events`: `pull_request`, `workflow_run`. `public: true`. `hook_attributes.url`과 `url`은 플래그 값이다. URL 형식을 검증한다.
 - `docs/github-app.md`: manifest 흐름으로 App을 만드는 절차, 개인키 다운로드, 설치 방법.
 - `docs/deploy.md`: Podman secret 생성 명령, Quadlet 파일 배치 경로(`~/.config/containers/systemd/`), `systemctl --user daemon-reload`와 시작, 리버스 프록시로 TLS를 종단해야 한다는 요구, 로컬 개발 시 웹훅 전달 방법.
-- `README.md`: 한 문단 소개, 실제 형식의 예시 코멘트, 요구 권한 표와 각 권한의 용도, 보안 정책(코드 미실행, 원문 미저장), CLI 사용법, 자체 호스팅 링크, 알려진 한계(정적 분석이 잡지 못하는 것, 추정의 전제, 잡 `name`에 표현식을 쓰거나 괄호 접미사가 겹치는 잡은 이력과 매칭되지 않아 추정이 생략된다는 점, 재사용 워크플로 내부는 보지 않는다는 점, 잡 `if`를 평가하지 않으므로 실행되지 않을 잡도 최대 동시 잡 수에 포함된다는 점, 매트릭스 값을 교체해 커버리지가 줄어도 조합 수가 같으면 보고되지 않는다는 점, `with:` 입력을 통한 도구 버전 고정 해제(예: `go-version: '1.22.3'` → `stable`)는 탐지하지 않는다는 점), 라이선스.
+- `README.md`: 맨 앞은 GitHub Action 사용법이다(23절): 예시 워크플로, 필요한 권한 표, 포크 PR 동작, 데이터가 GitHub 밖으로 나가지 않는다는 점. 그 뒤에 한 문단 소개, 실제 형식의 예시 코멘트, 요구 권한 표와 각 권한의 용도, 보안 정책(코드 미실행, 원문 미저장), CLI 사용법, "고급" 절로 내린 App 자체 호스팅 링크, 알려진 한계(정적 분석이 잡지 못하는 것, 추정의 전제, 잡 `name`에 표현식을 쓰거나 괄호 접미사가 겹치는 잡은 이력과 매칭되지 않아 추정이 생략된다는 점, 재사용 워크플로 내부는 보지 않는다는 점, 잡 `if`를 평가하지 않으므로 실행되지 않을 잡도 최대 동시 잡 수에 포함된다는 점, 매트릭스 값을 교체해 커버리지가 줄어도 조합 수가 같으면 보고되지 않는다는 점, `with:` 입력을 통한 도구 버전 고정 해제(예: `go-version: '1.22.3'` → `stable`)는 탐지하지 않는다는 점), 라이선스.
 
 ---
 
@@ -1351,3 +1357,98 @@ vercel/next.js/canary/.github/workflows/build_and_test.yml
 ### 22.4 `재개 Phase N`
 
 `main`의 현재 내용을 Phase N 산출물 목록과 대조해 완료·미완료·불완전 표를 먼저 보여주고 나머지를 수행한다. `phase N: wip` 커밋이 있으면 그 내용을 특히 확인한다. 불완전한 파일은 처음부터 다시 쓰지 않는다.
+
+---
+
+## 23. GitHub Action
+
+quanto는 App 외에 GitHub Action으로도 배포한다. Action은 PR 워크플로 안에서 `GITHUB_TOKEN`으로 같은 분석을 수행하고, 결과를 Job Summary, 워크플로 명령 어노테이션, PR 코멘트로 낸다. DB와 웹훅이 없다. App 코드(`internal/app`, `internal/store`)는 그대로 유지한다.
+
+### 23.1 구조
+
+| 패키지 | 역할 | import 허용 |
+|---|---|---|
+| `internal/analysis` | PR 파일 목록 → merge-base·head 파일 읽기 → `semdiff.Input` 구성, 비교, 코멘트 본문 선택 | core 전부, `internal/github`(타입) |
+| `internal/action` | `quanto action` 서브커맨드 구현 | core 전부, `internal/analysis`, `internal/github` |
+
+- `internal/analysis` API:
+
+```go
+const WorkflowDir = ".github/workflows/"
+
+type Source interface {
+    PullRequestFiles(ctx, owner, repo string, number int) ([]github.PullRequestFile, error)
+    MergeBase(ctx, owner, repo, base, head string) (string, error)
+    FileContent(ctx, owner, repo, path, ref string) ([]byte, bool, error)
+}
+type Request struct {
+    Owner, Repo string
+    Number      int
+    BaseSHA     string
+    HeadSHA     string
+    MaxFiles    int
+}
+type Result struct {
+    MergeBase string
+    Inputs    []semdiff.Input
+    Meta      report.Meta
+}
+func IsWorkflowPath(p string) bool
+func Load(ctx, src Source, req Request) (*Result, error)
+func (r *Result) Compare(opts semdiff.Options) []*semdiff.FileDiff
+func HasFindings(diffs []*semdiff.FileDiff) bool
+func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta) (body string, publishable bool)
+```
+
+- `Load`는 15.3의 3~6단계를 그대로 수행한다. 워크플로 파일이 없으면 `MergeBase`를 호출하지 않고 `Inputs`가 빈 `Result`를 반환한다. GitHub 접근 실패는 에러로 반환하고, 파일 단위 파싱 실패와 `ErrFileTooLarge`는 `Input.BeforeErr`/`AfterErr`로 넘긴다.
+- `CommentBody`는 15.3의 11단계 문구 규칙이다: `Publishable`이면 `report.Markdown`, Finding이 있으면 `report.BelowThreshold`, 없으면 `report.NoChanges`.
+- App의 `analyze_pr`는 `analysis.Load`, `Result.Compare`, `analysis.CommentBody`를 쓴다. App의 동작, 요청 순서, 골든(`testdata/golden/e2e/`)은 바뀌지 않는다.
+- `internal/github`에 `NewTokenClient(opts Options, token string) (*Client, error)`를 추가한다. 인증 헤더는 `Authorization: Bearer <token>`이다. 토큰 클라이언트에서 `FindCheckRun`은 App ID가 없으므로 에러를 반환한다. 토큰은 에러 메시지에 넣지 않는다.
+- `internal/github`에 `WorkflowFileRuns(ctx, owner, repo, workflowFile string, limit int) ([]WorkflowRun, error)`를 추가한다. `GET /repos/{o}/{r}/actions/workflows/{file}/runs?status=success&per_page={limit}` 한 페이지만 읽는다. `limit`은 `[1, 100]`으로 클램프한다.
+
+### 23.2 입력
+
+| 출처 | 이름 | 처리 |
+|---|---|---|
+| 환경 변수 | `GITHUB_EVENT_NAME` | `pull_request`, `pull_request_target`가 아니면 안내 문구를 stdout에 쓰고 종료 코드 0 |
+| 환경 변수 | `GITHUB_EVENT_PATH` | 이벤트 JSON. 비었거나 읽지 못하거나 `pull_request.number`, `pull_request.head.sha`, `pull_request.base.sha`가 없으면 설정 오류. 25 MiB 상한 |
+| 환경 변수 | `GITHUB_TOKEN` | 비면 설정 오류 |
+| 환경 변수 | `GITHUB_REPOSITORY` | `owner/repo` 형식이 아니면 설정 오류 |
+| 환경 변수 | `GITHUB_API_URL` | 비면 `https://api.github.com`. 절대 http(s) URL이 아니면 설정 오류 |
+| 환경 변수 | `GITHUB_STEP_SUMMARY` | 비면 Job Summary를 쓰지 않는다. 쓸 때는 파일 끝에 덧붙인다 |
+| action 입력 | `INPUT_COMMENT` | `true`/`false`(대소문자 무시). 비면 `true`. 그 외 값은 설정 오류 |
+| action 입력 | `INPUT_ESTIMATE` | 같은 규칙. 비면 `true` |
+| action 입력 | `INPUT_MAX_FILES` | 1~200 정수. 비면 50. 그 외 값은 설정 오류 |
+
+검사 순서는 이벤트 이름 → 나머지 설정이다. 설정 오류는 `quanto: <메시지>`를 stderr에 쓰고 종료 코드 1이다. 그 외 모든 경우(분석 실패, API 실패 포함) 종료 코드는 0이다.
+
+### 23.3 동작
+
+1. `analysis.Load`로 분석 입력을 만든다. GitHub API 실패면 `::warning` 명령으로 에러를 쓰고, Job Summary에 `## quanto` + `Analysis failed: a GitHub API request failed. See the step log.`를 쓰고 끝낸다.
+2. 워크플로 파일이 없으면 Job Summary에 `## quanto` + `No workflow files changed in this pull request.`를 쓰고 끝낸다. 코멘트는 건드리지 않는다.
+3. **추정.** `estimate`가 true면 분석할 파일의 경로 집합(before 쪽은 `OldPath`가 있으면 `OldPath`, 아니면 `Path`. after 쪽은 `Path`)을 정렬하고 앞의 `EstimateMaxFiles`(10)개까지만 조회한다. 경로마다 `WorkflowFileRuns(파일명, 10)`으로 최근 성공 실행 최대 10회를 읽고, 실행마다 `RunJobs`를 읽는다. 잡 필터는 `conclusion == success`, 시작·완료 시각이 있고 완료 ≥ 시작, `NormalizeRunJobName` 성공이다. `(경로, 잡 키)`별로 완료 시각 내림차순·잡 ID 내림차순 최신 30건의 초 단위 평균을 반올림해 `avg`, 개수를 샘플 수로 쓴다(14.3의 `RecomputeJobStats`와 같은 규칙). `WorkflowFileRuns`가 404면 그 경로는 이력 없음이다. 그 외 에러가 하나라도 나면 추정 전체를 생략하고(`Durations = nil`) `::warning`으로 에러를 쓴다. 추정에 쓴 API 호출 수(응답을 받은 요청 수)를 Job Summary에 `Runner-minute estimate: {n} GitHub API calls for {m} workflow files.`(단수·복수 일치)로 기록한다. 생략했으면 `Runner-minute estimate skipped: a GitHub API request failed.`를 쓴다. 상한: 호출 수 ≤ 10 × (1 + 10 × 잡 목록 페이지 수).
+4. 파일별 `semdiff.Compare`.
+5. **어노테이션.** `report.Annotations` 순서대로 `::notice file=…,line=…,endLine=…[,col=…,endColumn=…],title=…::message`를 stdout에 쓴다. 컬럼은 0이 아닐 때만 넣는다. 워크플로 명령은 전부 단일 함수 `command(name, props, message)`로만 만든다. 이 함수는 메시지에 `%` → `%25`, `\r` → `%0D`, `\n` → `%0A`를, 속성 값에는 추가로 `:` → `%3A`, `,` → `%2C`를 적용한다. stdout에 쓰는 다른 줄은 고정 문구뿐이다.
+6. **코멘트.** `comment`가 true일 때만 수행한다. `analysis.CommentBody`로 본문을 정한다. `IssueComments`에서 작성자 login이 `github-actions[bot]`이고 본문이 `CommentMarker`로 시작하는 첫 코멘트를 찾는다. 있으면 수정하고, 없으면 `publishable`일 때만 생성한다. 코멘트 API가 `*APIError` 403을 반환하면(포크 PR의 읽기 전용 토큰 등) 실패로 보지 않고 Job Summary에 `comment skipped: token is read-only` 한 줄을 남긴다. 그 외 에러는 `::warning`으로 쓰고 Job Summary에 `comment skipped: a GitHub API request failed.`를 남긴다. head 재확인과 코멘트 ID 캐시는 하지 않는다.
+7. **Job Summary.** `report.CheckSummary`의 summary를 쓰고, 그 뒤에 빈 줄을 사이에 두고 추정 줄과 코멘트 줄을 이 순서로 덧붙인다.
+
+### 23.4 `action.yml` (저장소 루트, composite)
+
+- 입력: `github-token`(기본 `${{ github.token }}`), `comment`(기본 `true`), `estimate`(기본 `true`), `max-files`(기본 `50`), `version`(기본 빈 문자열 = action ref와 같은 태그).
+- 설치 단계(bash): `RUNNER_OS`/`RUNNER_ARCH`를 `quanto-linux-amd64`, `quanto-linux-arm64`, `quanto-darwin-amd64`, `quanto-darwin-arm64`, `quanto-windows-amd64.exe` 중 하나로 매핑한다. 그 외 조합은 `::error` 후 종료 코드 1.
+  - 저장소와 ref: `github.action_repository`, `version` 입력 또는 `github.action_ref`. 비어 있으면 `GITHUB_ACTION_PATH`의 `_actions/<owner>/<repo>/<ref>`에서 도출한다.
+  - `GITHUB_ACTION_PATH`에 `/_actions/`가 없고(`uses: ./` 로컬 액션) `version`이 비었으면 릴리스를 받지 않고 action 디렉터리에서 `go build`로 만든다(Go가 설치돼 있어야 한다).
+  - 그 외에는 `https://github.com/<repo>/releases/download/<ref>/`에서 바이너리와 `checksums.txt`를 받고, 해당 파일의 sha256을 `checksums.txt`와 대조한다. 항목이 없거나 불일치하면 실행하지 않고 `::error` 후 종료 코드 1.
+- 실행 단계: `GITHUB_TOKEN`, `INPUT_COMMENT`, `INPUT_ESTIMATE`, `INPUT_MAX_FILES`를 env로 넘기고 `quanto action`을 실행한다. 입력 값을 `run:` 본문에 `${{ }}`로 직접 넣지 않는다.
+
+### 23.5 릴리스와 도그푸딩
+
+- `.github/workflows/release.yml`: `v*` 태그 푸시에서 테스트 후 23.4의 5개 조합을 `CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=<tag>"`로 만들고, `sha256sum` 형식의 `checksums.txt`를 만든 뒤 `actions/attest-build-provenance`로 바이너리에 빌드 출처 증명을 붙이고 `gh`로 Release를 만든다. 같은 태그의 Release가 이미 있으면(이동한 `v1` 같은 메이저 태그) 자산을 `--clobber`로 교체한다. 액션은 커밋 SHA로 고정한다. 워크플로 수준 `permissions: contents: read`, 잡 수준 `contents: write`, `id-token: write`, `attestations: write`. 태그 생성과 이동은 사람이 한다(0절).
+- `.github/workflows/quanto.yml`: `pull_request`(`paths: ['.github/workflows/**']`), `permissions: contents: read, pull-requests: write, actions: read`, checkout → setup-go(`go-version-file: go.mod`) → `uses: ./`.
+
+### 23.6 테스트
+
+- `internal/analysis`: 계획(`planFiles`), 워크플로 경로 판정, merge-base·head 읽기, 파일 상한, 에러 전파, `CommentBody` 세 경우.
+- `internal/action`: `httptest` 가짜 GitHub로 정상, 포크 PR 403, 이벤트 불일치, 설정 오류, 추정 실패 폴백, 기존 코멘트 갱신, 사람 코멘트 미수정, 게시 기준 미달 시 코멘트 미생성. e2e 골든 `testdata/golden/action/`: `summary.md`(Job Summary), `commands.txt`(stdout 워크플로 명령), `comment.md`(코멘트 본문). 픽스처는 semdiff 골든 `matrix-axis-added`.
+- 워크플로 명령: 개행, `::set-output`, `::add-mask::`, `::stop-commands::` 주입 입력이 한 줄 명령 안에 갇히는지, 속성 구분자가 이스케이프되는지 검증한다. 퍼즈 `FuzzCommand`: 임의 속성·메시지에서 출력이 개행 없는 한 줄이고, 역이스케이프하면 원래 값이 나온다.
+- 퍼즈 대상에 `internal/action.FuzzCommand`를 추가한다(3절, 18절, 19절).
