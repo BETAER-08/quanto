@@ -10,7 +10,7 @@ import (
 )
 
 const GitHubJobLimit = 256
-const MaterializeLimit = 100000
+const MaterializeLimit = 1024
 
 const (
 	codeEmptyAxis = "MATRIX-EMPTY-AXIS"

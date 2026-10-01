@@ -3,6 +3,7 @@ package matrix
 import (
 	"math"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/BETAER-08/quanto/core/source"
@@ -306,30 +307,39 @@ func TestOverGitHubLimit(t *testing.T) {
 }
 
 func TestTooLarge(t *testing.T) {
-	axis := "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"
-	content := ""
-	for _, name := range []string{"a", "b", "c", "d", "e"} {
-		content += name + ": " + axis + "\n"
+	values := make([]string, 32)
+	for i := range values {
+		values[i] = strconv.Itoa(i)
 	}
-	exp := expand(t, content)
-	if !exp.Materialized || exp.Count != 100000 {
+	wide := "[" + strings.Join(values, ", ") + "]"
+	exp := expand(t, "a: "+wide+"\nb: "+wide+"\n")
+	if !exp.Materialized || exp.Count != MaterializeLimit || len(exp.Instances) != MaterializeLimit {
 		t.Fatalf("at limit: Count = %d, Materialized = %v", exp.Count, exp.Materialized)
 	}
-	for _, name := range []string{"f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"} {
-		content += name + ": " + axis + "\n"
+	if hasCode(exp, "MATRIX-TOO-LARGE") || !hasCode(exp, "MATRIX-OVER-LIMIT") {
+		t.Errorf("at limit codes = %v", codes(exp))
 	}
-	exp = expand(t, content)
-	if exp.Materialized || exp.Instances != nil {
-		t.Fatalf("Materialized = %v", exp.Materialized)
-	}
-	if exp.Count <= MaterializeLimit {
-		t.Errorf("Count = %d", exp.Count)
+	exp = expand(t, "a: "+wide+"\nb: "+wide+"\nc: [x, y]\ninclude:\n  - extra: 1\n")
+	if exp.Materialized || exp.Instances != nil || exp.Count != 2*MaterializeLimit {
+		t.Fatalf("over limit: Count = %d, Materialized = %v", exp.Count, exp.Materialized)
 	}
 	if !hasCode(exp, "MATRIX-TOO-LARGE") || !hasCode(exp, "MATRIX-OVER-LIMIT") {
 		t.Errorf("codes = %v", codes(exp))
 	}
-	if exp.Count != math.MaxInt {
-		t.Errorf("Count = %d, want saturated %d", exp.Count, math.MaxInt)
+	axis := "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"
+	content := ""
+	for _, name := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"} {
+		content += name + ": " + axis + "\n"
+	}
+	exp = expand(t, content)
+	if exp.Materialized || exp.Instances != nil || exp.Count != math.MaxInt {
+		t.Errorf("saturated: Count = %d, Materialized = %v, want %d", exp.Count, exp.Materialized, math.MaxInt)
+	}
+}
+
+func TestMaterializeLimitValue(t *testing.T) {
+	if MaterializeLimit != 1024 || MaterializeLimit <= GitHubJobLimit {
+		t.Fatalf("MaterializeLimit = %d", MaterializeLimit)
 	}
 }
 

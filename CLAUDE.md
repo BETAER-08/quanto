@@ -498,7 +498,7 @@ type Expansion struct {
 }
 
 const GitHubJobLimit = 256
-const MaterializeLimit = 100000
+const MaterializeLimit = 1024
 
 func Expand(matrix *source.Node) (*Expansion, error)
 ```
@@ -518,7 +518,7 @@ func Expand(matrix *source.Node) (*Expansion, error)
    - 중복 제거는 하지 않는다.
    - 참조: GitHub 문서의 설명은 "`{fruit: banana, animal: cat}`은 `{fruit: banana}` 조합에 추가되지 않는다. 그 조합은 원래 매트릭스 조합이 아니기 때문이다"이다. 7.3 골든이 이 규칙을 검증한다.
 6. **동적.** 다음 중 하나면 `Dynamic = true`, `Count = 0`, `Materialized = false`이고 사유를 기록한다: 매트릭스 노드 자체가 `${{`를 포함한 스칼라, 축 값 전체가 `${{` 스칼라(예: `os: ${{ fromJSON(...) }}`), `include` 또는 `exclude`가 `${{` 스칼라. 리스트 **원소** 하나가 표현식인 경우(`os: [ubuntu, ${{ vars.X }}]`)는 원소 하나로 세며 동적이 아니다.
-7. **크기 제한.** 기본 조합 수(곱)가 `MaterializeLimit`을 넘으면 실체화하지 않는다. `Count = 곱`, `Materialized = false`, `MATRIX-TOO-LARGE` 진단이다. `Count > GitHubJobLimit`이면 `MATRIX-OVER-LIMIT` 진단이다.
+7. **크기 제한.** 기본 조합 수(곱)가 `MaterializeLimit`(1024)을 넘으면 실체화하지 않는다. `Count = 곱`(포화 연산: 넘치면 `math.MaxInt`), `Materialized = false`, `Instances = nil`, `MATRIX-TOO-LARGE` 진단이다. include는 반영하지 않는다(그래서 semdiff는 `≥N`으로 표기한다). 상한을 1024로 두는 근거: GitHub은 256개를 넘는 매트릭스를 거부하므로 그 이상을 실체화해도 쓸 데가 없고, 공개 PR 입력이 조합 실체화로 CPU와 메모리를 증폭시키지 못하게 하기 위해서다. `Count > GitHubJobLimit`이면 `MATRIX-OVER-LIMIT` 진단이다.
 
 ### 7.3 필수 골든 테스트
 
@@ -551,7 +551,7 @@ include:
 
 **exclude 예제.** `os: [macos-latest, windows-latest]`, `version: [12, 14, 16]`, `environment: [staging, production]`, `exclude: [{os: macos-latest, version: 12, environment: production}, {os: windows-latest, version: 16}]` → `Count = 9`.
 
-그 외: 축 없이 include만(각 항목이 조합), 빈 축, 동적 네 형태, 원소 하나만 표현식, 257개 조합의 제한 초과, 곱이 10만을 넘는 경우 비실체화, 객체 값 축, 정수와 문자열 `18` vs `'18'` 구분, 퍼즈.
+그 외: 축 없이 include만(각 항목이 조합), 빈 축, 동적 네 형태, 원소 하나만 표현식, 257개 조합의 제한 초과, 곱이 1024인 경우 실체화와 1024를 넘는 경우 비실체화(include 무시, 포화 연산), 객체 값 축, 정수와 문자열 `18` vs `'18'` 구분, 퍼즈.
 
 ---
 
