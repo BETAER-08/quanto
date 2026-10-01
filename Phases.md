@@ -8,7 +8,7 @@
 CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 1만 수행한다.
 
 [절대 조건]
-- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 작업 브랜치에 푸시한다. main에 직접 푸시하거나 force 푸시하지 마라. PR은 만들지 마라.
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 main에 푸시한다. 브랜치·PR·force 푸시는 쓰지 않는다.
 - CLAUDE.md 0절의 절대 규칙을 전부 지킨다. 특히 코드 주석 금지, 플레이스홀더 금지, 범위 고정, 의존성 허용 목록.
 
 [선행 확인 — 하나라도 실패하면 즉시 멈추고 보고]
@@ -16,7 +16,7 @@ CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 1만 수�
 2. `git remote get-url origin`이 성공하는가. 결과에서 모듈 경로를 도출한다(CLAUDE.md 3절). 클라우드 세션의 원격 URL이 프록시 주소 형태라 owner/repo를 확정할 수 없으면 추측하지 말고 멈춰서 모듈 경로를 물어라.
 3. 루트에 CLAUDE.md가 있는가. 없으면 멈춰라.
 4. 추적 중인 파일이 LICENSE와 CLAUDE.md뿐인가(`git ls-files`). 다른 파일이 있으면 멈추고 목록을 보고한다.
-5. 작업 브랜치를 확정한다. 세션 환경이 지정한 브랜치가 있으면 그것을 쓴다. 없고 현재 브랜치가 main이면 `git checkout -b phase-1`로 만든다. 브랜치 이름을 보고서에 적는다.
+5. CLAUDE.md 0절 1번에 따라 main으로 전환해 최신 상태에서 시작한다.
 
 [이번 페이즈의 산출물]
 1. go.mod, go.sum (의존성은 gopkg.in/yaml.v3만)
@@ -49,7 +49,7 @@ CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 1만 수�
 - make check
 
 [종료]
-CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), CLAUDE.md 21절 형식으로 보고하고 멈춰라. 다음 페이즈를 시작하지 마라.
+CLAUDE.md 21절 형식으로 보고하고 멈춰라. 다음 페이즈를 시작하지 마라.
 ```
 
 ---
@@ -60,12 +60,12 @@ CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), C
 CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 2만 수행한다.
 
 [절대 조건]
-- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 작업 브랜치에 푸시한다. main에 직접 푸시하거나 force 푸시하지 마라. PR은 만들지 마라.
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 main에 푸시한다. 브랜치·PR·force 푸시는 쓰지 않는다.
 - CLAUDE.md 0절의 절대 규칙을 전부 지킨다.
 - Phase 1 산출물(core/source 등)은 이 페이즈의 요구를 충족하는 데 반드시 필요한 경우에만 수정한다. 수정했다면 보고서에 이유를 적는다.
 
 [선행 확인]
-- CLAUDE.md 22.1절로 이전 작업을 이어받는다. 그 뒤 `git log --oneline -40`에 `phase 1:` 커밋이 없으면 멈추고 보고한다.
+- CLAUDE.md 0절 1번에 따라 최신 main에서 시작한다. `git log --oneline -60`에 `phase 1:` 커밋이 없으면 멈추고 보고한다.
 - make check가 현재 상태에서 통과하는지 먼저 확인한다. 실패하면 아무것도 만들지 말고 실패 내용을 보고한다.
 
 [이번 페이즈의 산출물]
@@ -87,7 +87,7 @@ CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 2만 수�
 - go test -run '^$' -fuzz FuzzParseTemplate -fuzztime 60s -fuzzminimizetime 5s ./core/expr/
 
 [종료]
-CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), CLAUDE.md 21절 형식으로 보고하고 멈춰라.
+CLAUDE.md 21절 형식으로 보고하고 멈춰라.
 ```
 
 ---
@@ -98,11 +98,11 @@ CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), C
 CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 3만 수행한다.
 
 [절대 조건]
-- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 작업 브랜치에 푸시한다. main에 직접 푸시하거나 force 푸시하지 마라. PR은 만들지 마라.
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 main에 푸시한다. 브랜치·PR·force 푸시는 쓰지 않는다.
 - CLAUDE.md 0절의 절대 규칙을 전부 지킨다.
 
 [선행 확인]
-- CLAUDE.md 22.1절로 이전 작업을 이어받는다. 그 뒤 `git log --oneline -40`에 `phase 2:` 커밋이 없으면 멈추고 보고한다.
+- CLAUDE.md 0절 1번에 따라 최신 main에서 시작한다. `git log --oneline -60`에 `phase 2:` 커밋이 없으면 멈추고 보고한다.
 - make check가 통과하는지 먼저 확인한다. 실패하면 멈추고 보고한다.
 
 [이번 페이즈의 산출물]
@@ -128,7 +128,7 @@ CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 3만 수�
 - go test -run '^$' -fuzz FuzzExpand -fuzztime 60s -fuzzminimizetime 5s ./core/matrix/
 
 [종료]
-CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), CLAUDE.md 21절 형식으로 보고하고 멈춰라.
+CLAUDE.md 21절 형식으로 보고하고 멈춰라.
 ```
 
 ---
@@ -139,11 +139,11 @@ CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), C
 CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 4만 수행한다. 이 페이즈는 제품의 핵심이다.
 
 [절대 조건]
-- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 작업 브랜치에 푸시한다. main에 직접 푸시하거나 force 푸시하지 마라. PR은 만들지 마라.
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 main에 푸시한다. 브랜치·PR·force 푸시는 쓰지 않는다.
 - CLAUDE.md 0절의 절대 규칙을 전부 지킨다.
 
 [선행 확인]
-- CLAUDE.md 22.1절로 이전 작업을 이어받는다. 그 뒤 `git log --oneline -40`에 `phase 3:` 커밋이 없으면 멈추고 보고한다.
+- CLAUDE.md 0절 1번에 따라 최신 main에서 시작한다. `git log --oneline -60`에 `phase 3:` 커밋이 없으면 멈추고 보고한다.
 - make check가 통과하는지 먼저 확인한다. 실패하면 멈추고 보고한다.
 
 [진행 방식]
@@ -175,7 +175,7 @@ CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 4만 수�
 - go test -run '^$' -fuzz FuzzCompare -fuzztime 60s -fuzzminimizetime 5s ./core/semdiff/
 
 [종료]
-CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), CLAUDE.md 21절 형식으로 보고하고 멈춰라.
+CLAUDE.md 21절 형식으로 보고하고 멈춰라.
 ```
 
 ---
@@ -186,11 +186,11 @@ CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), C
 CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 5만 수행한다.
 
 [절대 조건]
-- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 작업 브랜치에 푸시한다. main에 직접 푸시하거나 force 푸시하지 마라. PR은 만들지 마라.
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 main에 푸시한다. 브랜치·PR·force 푸시는 쓰지 않는다.
 - CLAUDE.md 0절의 절대 규칙을 전부 지킨다.
 
 [선행 확인]
-- CLAUDE.md 22.1절로 이전 작업을 이어받는다. 그 뒤 `git log --oneline -40`에 `phase 4:` 커밋이 없으면 멈추고 보고한다.
+- CLAUDE.md 0절 1번에 따라 최신 main에서 시작한다. `git log --oneline -60`에 `phase 4:` 커밋이 없으면 멈추고 보고한다.
 - make check가 통과하는지 먼저 확인한다. 실패하면 멈추고 보고한다.
 
 [이번 페이즈의 산출물]
@@ -220,7 +220,7 @@ CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 5만 수�
 - make build
 
 [종료]
-CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), CLAUDE.md 21절 형식으로 보고하고 멈춰라.
+CLAUDE.md 21절 형식으로 보고하고 멈춰라.
 ```
 
 ---
@@ -231,12 +231,12 @@ CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), C
 CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 6만 수행한다.
 
 [절대 조건]
-- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 작업 브랜치에 푸시한다. main에 직접 푸시하거나 force 푸시하지 마라. PR은 만들지 마라.
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 main에 푸시한다. 브랜치·PR·force 푸시는 쓰지 않는다.
 - CLAUDE.md 0절의 절대 규칙을 전부 지킨다.
 - 테스트에서 실제 GitHub API에 접근하지 마라. 전부 httptest.Server로 대체한다.
 
 [선행 확인]
-- CLAUDE.md 22.1절로 이전 작업을 이어받는다. 그 뒤 `git log --oneline -40`에 `phase 5:` 커밋이 없으면 멈추고 보고한다.
+- CLAUDE.md 0절 1번에 따라 최신 main에서 시작한다. `git log --oneline -60`에 `phase 5:` 커밋이 없으면 멈추고 보고한다.
 - make check가 통과하는지 먼저 확인한다. 실패하면 멈추고 보고한다.
 
 [이번 페이즈의 산출물]
@@ -259,7 +259,7 @@ CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 6만 수�
 - make check
 
 [종료]
-CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), CLAUDE.md 21절 형식으로 보고하고 멈춰라.
+CLAUDE.md 21절 형식으로 보고하고 멈춰라.
 ```
 
 ---
@@ -270,12 +270,12 @@ CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), C
 CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 7만 수행한다.
 
 [절대 조건]
-- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 작업 브랜치에 푸시한다. main에 직접 푸시하거나 force 푸시하지 마라. PR은 만들지 마라.
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 main에 푸시한다. 브랜치·PR·force 푸시는 쓰지 않는다.
 - CLAUDE.md 0절의 절대 규칙을 전부 지킨다.
 - 워크플로 파일 원문을 DB의 어떤 테이블에도 저장하지 마라.
 
 [선행 확인]
-- CLAUDE.md 22.1절로 이전 작업을 이어받는다. 그 뒤 `git log --oneline -40`에 `phase 6:` 커밋이 없으면 멈추고 보고한다.
+- CLAUDE.md 0절 1번에 따라 최신 main에서 시작한다. `git log --oneline -60`에 `phase 6:` 커밋이 없으면 멈추고 보고한다.
 - make check가 통과하는지 먼저 확인한다. 실패하면 멈추고 보고한다.
 
 [진행 방식]
@@ -319,7 +319,7 @@ CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 7만 수�
 - 푸시 후 CI의 integration 잡이 통과하는지 확인할 수 있으면 확인하고, 확인할 수 없으면 보고서에 사람이 확인해야 한다고 적는다
 
 [종료]
-CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), CLAUDE.md 21절 형식으로 보고하고 멈춰라.
+CLAUDE.md 21절 형식으로 보고하고 멈춰라.
 ```
 
 ---
@@ -330,11 +330,11 @@ CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), C
 CLAUDE.md를 처음부터 끝까지 읽어라. 이번 세션은 Phase 8만 수행한다. 마지막 페이즈다.
 
 [절대 조건]
-- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 작업 브랜치에 푸시한다. main에 직접 푸시하거나 force 푸시하지 마라. PR은 만들지 마라.
+- git은 CLAUDE.md 0절 1번을 따른다. 산출물 묶음이 테스트를 통과할 때마다 `phase N: ...`로 커밋하고 main에 푸시한다. 브랜치·PR·force 푸시는 쓰지 않는다.
 - CLAUDE.md 0절의 절대 규칙을 전부 지킨다.
 
 [선행 확인]
-- CLAUDE.md 22.1절로 이전 작업을 이어받는다. 그 뒤 `git log --oneline -40`에 `phase 7:` 커밋이 없으면 멈추고 보고한다.
+- CLAUDE.md 0절 1번에 따라 최신 main에서 시작한다. `git log --oneline -60`에 `phase 7:` 커밋이 없으면 멈추고 보고한다.
 - make check가 통과하는지 먼저 확인한다. 실패하면 멈추고 보고한다.
 
 [이번 페이즈의 산출물]
@@ -369,7 +369,7 @@ CLAUDE.md의 0절부터 21절까지 각 절을 순서대로 다시 읽고, 절�
 - make image (컨테이너 빌드가 가능할 때만)
 
 [종료]
-CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), CLAUDE.md 21절 형식에 최종 감사 표를 붙여 보고하고 멈춰라.
+CLAUDE.md 21절 형식에 최종 감사 표를 붙여 보고하고 멈춰라.
 ```
 
 ---
@@ -379,19 +379,19 @@ CLAUDE.md 0절 1번에 따라 main으로 PR을 열고(병합하지 않는다), C
 ```
 CLAUDE.md를 처음부터 끝까지 읽어라. 너는 검수자다. 어떤 파일도 수정하지 말고, 커밋과 푸시도 하지 마라. 이 세션은 읽기 전용이다.
 
-검수 대상은 브랜치 <브랜치>의 Phase N이다.
-git fetch origin <브랜치> 후 git diff main...origin/<브랜치> 와 git log main..origin/<브랜치> 로 변경을 파악하라. 테스트 실행이 필요하면 git checkout --detach origin/<브랜치> 로 전환해서 실행한다.
+검수 대상은 main에 있는 Phase N의 커밋이다. 여러 페이즈를 지정하면 모두 대상이다.
+git log --oneline --grep '^phase N:' 로 해당 커밋을 찾고, 그 범위를 git show 와 git diff <첫 커밋>^..<마지막 커밋> 으로 파악하라.
 
 다음을 검사하고 결과만 보고하라.
 1. CLAUDE.md에서 Phase N 범위에 해당하는 절의 요구 사항을 항목별로 나열하고, 각각 충족/부분/미충족과 근거(파일:줄)를 적는다.
 2. 명세에 없는 기능, 플래그, 파일, 의존성이 추가됐는지 찾는다.
-3. 절대 규칙 위반을 찾는다: 코드 주석, 플레이스홀더, core/internal 안의 panic·os.Exit·log.Fatal, map 순회 결과를 정렬 없이 출력하는 곳, 에러 무시(_ = err 또는 반환값 버림), 비밀값이 로그나 에러에 들어갈 수 있는 경로, wip 커밋이 남아 있는지.
+3. 절대 규칙 위반을 찾는다: 코드 주석, 플레이스홀더, core/internal 안의 panic·os.Exit·log.Fatal, map 순회 결과를 정렬 없이 출력하는 곳, 에러 무시(_ = err 또는 반환값 버림), 비밀값이 로그나 에러에 들어갈 수 있는 경로, 정리되지 않은 wip 커밋.
 4. 테스트가 명세의 필수 테스트 목록을 전부 덮는지 대조한다. 빠진 테스트를 나열한다.
 5. 골든 파일 중 무작위 3개를 골라 직접 열고, 명세를 손으로 적용한 결과와 일치하는지 검토한다.
 6. make check를 실행하고 결과를 적는다.
 
 출력 형식:
-- 치명(병합 전 반드시 수정)
+- 치명(다음 페이즈 전 반드시 수정)
 - 중요(다음 페이즈 전 수정 권장)
 - 경미
 각 항목은 "파일:줄 — 문제 — 명세 근거(절 번호)" 한 줄로 쓴다.
