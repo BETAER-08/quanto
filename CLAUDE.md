@@ -1173,6 +1173,8 @@ func (s *Store) PendingCount(ctx) (int64, error)
 7. `store.Durations(repository_id)`로 DurationSource를 만든다.
 8. 파일별 `semdiff.Compare`.
 9. Check Run: `CheckSummary`와 `Annotations`로 만든다. Finding이 없어도 만든다. 먼저 `FindCheckRun(head_sha, "quanto")`로 자기 App의 기존 Check Run을 찾고, 있으면 `UpdateCheckRun`, 없으면 `CreateCheckRun`이다. 재시도와 같은 head의 재분석이 Check Run을 중복 생성하지 않게 하기 위해서다.
+   - 수용한 한계: 같은 head를 두 작업이 동시에 분석하면 둘 다 `FindCheckRun`에서 미발견을 보고 `CreateCheckRun`을 호출해 Check Run이 중복될 수 있다. README 알려진 한계에 적는다.
+   - 수용한 한계: 재시도 사이에 입력이 바뀌면(이력 통계 갱신 등) `annotations_count` 기준 이어쓰기가 앞쪽 어노테이션과 어긋나 중복·누락이 생길 수 있다. README 알려진 한계에 적는다.
 10. 코멘트 전에 `PullRequest`를 다시 읽는다. 현재 head SHA가 페이로드의 `head_sha`와 다르면 코멘트 단계를 건너뛴다.
 11. 코멘트 대상 ID는 `pr_comments` 캐시를 먼저 보고, 없으면 `IssueComments` 중 본문이 `CommentMarker`로 시작하고 작성자 login이 `{app slug}[bot]`인 것을 찾는다(App slug는 `App()` 결과를 프로세스 수명 동안 캐시).
     - `Publishable`이면 있으면 수정, 없으면 생성하고 캐시에 기록한다.

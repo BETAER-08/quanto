@@ -90,6 +90,8 @@ Exit codes: `0` success, `1` execution error (for example an unreadable input fi
 - Job history is matched by job name. Jobs whose `name` contains an expression, and jobs whose names collide once the ` (...)` matrix suffix is removed, do not match their history, so the estimate is omitted.
 - Runs of reusable workflows (job names containing ` / `) are not recorded.
 - At most `QUANTO_MAX_WORKFLOW_FILES` (default 50) workflow files are analyzed per pull request; files larger than 256 KiB are reported as unanalyzable, and `quanto inspect` and `quanto diff` refuse them with exit code 1.
+- If two analyses of the same head commit run at the same time, both can find no existing check run and each create one, so the commit can show two `quanto` check runs.
+- A retried analysis appends only the annotations that are not yet on the check run. If the input changed between attempts (for example, newly recorded run history adds an estimate finding), the annotations already uploaded are not corrected, so the check run can show duplicated or missing annotations.
 - Schema validation of workflows is out of scope; use a dedicated linter for that.
 
 ## License
