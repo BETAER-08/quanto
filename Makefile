@@ -1,7 +1,7 @@
 FUZZTIME ?= 20s
 VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo dev)
 
-.PHONY: fmt-check vet comments test test-race fuzz corpus build check
+.PHONY: fmt-check vet comments test test-race fuzz corpus build image check
 
 fmt-check:
 	@test -z "$$(gofmt -l .)" || { gofmt -l .; exit 1; }
@@ -29,5 +29,8 @@ corpus:
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/quanto ./cmd/quanto
+
+image:
+	podman build -f deploy/Containerfile --build-arg VERSION=$(VERSION) -t localhost/quanto:$(VERSION) -t localhost/quanto:latest .
 
 check: fmt-check vet comments test-race

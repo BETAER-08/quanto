@@ -1,0 +1,19 @@
+[Unit]
+Description=quanto PostgreSQL database
+
+[Container]
+ContainerName=quanto-db
+Image=docker.io/library/postgres:16
+Network=quanto.network
+Volume=quanto-db.volume:/var/lib/postgresql/data
+Secret=quanto-db-password
+Environment=POSTGRES_USER=quanto
+Environment=POSTGRES_DB=quanto
+Environment=POSTGRES_PASSWORD_FILE=/run/secrets/quanto-db-password
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

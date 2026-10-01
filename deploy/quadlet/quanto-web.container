@@ -1,0 +1,24 @@
+[Unit]
+Description=quanto web role
+Requires=quanto-db.service
+After=quanto-db.service
+
+[Container]
+ContainerName=quanto-web
+Image=localhost/quanto:latest
+Exec=serve --role web
+Network=quanto.network
+PublishPort=127.0.0.1:8080:8080
+Secret=quanto-database-url,type=env,target=QUANTO_DATABASE_URL
+Secret=quanto-app-id,type=env,target=QUANTO_APP_ID
+Secret=quanto-private-key
+Secret=quanto-webhook-secret
+Environment=QUANTO_PRIVATE_KEY_FILE=/run/secrets/quanto-private-key
+Environment=QUANTO_WEBHOOK_SECRET_FILE=/run/secrets/quanto-webhook-secret
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,23 @@
+[Unit]
+Description=quanto worker role
+Requires=quanto-db.service
+After=quanto-db.service
+
+[Container]
+ContainerName=quanto-worker
+Image=localhost/quanto:latest
+Exec=serve --role worker
+Network=quanto.network
+Secret=quanto-database-url,type=env,target=QUANTO_DATABASE_URL
+Secret=quanto-app-id,type=env,target=QUANTO_APP_ID
+Secret=quanto-private-key
+Secret=quanto-webhook-secret
+Environment=QUANTO_PRIVATE_KEY_FILE=/run/secrets/quanto-private-key
+Environment=QUANTO_WEBHOOK_SECRET_FILE=/run/secrets/quanto-webhook-secret
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
