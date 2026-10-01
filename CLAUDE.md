@@ -1076,10 +1076,10 @@ type QueueJob struct {
 
 func (s *Store) Enqueue(ctx, kind string, payload any, dedupeKey string) (bool, error)
 func (s *Store) Dequeue(ctx) (*QueueJob, error)
-func (s *Store) Complete(ctx, id int64) error
-func (s *Store) Fail(ctx, id int64, cause error) error
-func (s *Store) Defer(ctx, id int64, until time.Time) error
-func (s *Store) Kill(ctx, id int64, cause error) error
+func (s *Store) Complete(ctx, id int64, attempts int) error
+func (s *Store) Fail(ctx, id int64, attempts int, cause error) error
+func (s *Store) Defer(ctx, id int64, attempts int, until time.Time) error
+func (s *Store) Kill(ctx, id int64, attempts int, cause error) error
 func (s *Store) ReapStale(ctx, olderThan time.Duration) (int64, error)
 func (s *Store) PruneQueue(ctx, doneOlderThan, deadOlderThan time.Duration) (int64, error)
 func (s *Store) PendingCount(ctx) (int64, error)
@@ -1087,10 +1087,11 @@ func (s *Store) PendingCount(ctx) (int64, error)
 
 - `Enqueue`: 중복 키 충돌은 에러가 아니라 `false`다. 빈 `dedupeKey`는 NULL이다. 부분 유니크 인덱스를 쓰므로 `ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL AND status IN ('pending', 'running') DO NOTHING` 형태로 인덱스 술어를 명시한다.
 - `Dequeue`: `status = 'pending' AND run_after <= now()`인 행 하나를 `ORDER BY run_after, id FOR UPDATE SKIP LOCKED`로 잡는다. `status = 'running'`, `locked_at = now()`, `attempts + 1`로 바꾼다. 없으면 `(nil, nil)`이다.
+- **소유권 펜싱.** `Complete`, `Fail`, `Defer`, `Kill`은 `Dequeue`가 돌려준 `attempts`를 펜싱 토큰으로 받고 `WHERE id = $1 AND status = 'running' AND attempts = $2` 조건으로만 갱신한다. 갱신된 행이 0이면 `ErrLeaseLost`(`store: job lease lost`)를 반환한다. reap 후 다른 워커가 다시 잡은 작업을 이전 소유자가 덮어쓰지 못하게 하기 위해서다. `ErrNotFound`는 두지 않는다.
 - `Fail`: `attempts ≥ 5`면 `dead`, 아니면 `pending`이고 `run_after = now() + min(30s × 2^(attempts-1), 30m)`이다. `last_error`는 500자로 자른다.
 - `Defer`: 레이트 리밋용이다. `pending`으로 되돌리고 `run_after = until`, `attempts - 1`로 바꾼다.
 - `Kill`: 재시도해도 결과가 같은 실패용이다. attempts와 무관하게 `status = 'dead'`로 바꾸고 `last_error`를 500자로 잘라 기록한다.
-- `ReapStale`: `running`이면서 `locked_at`이 기준보다 오래된 행을 `pending`으로 되돌린다.
+- `ReapStale`: `running`이면서 `locked_at`이 기준보다 오래된 행을 `pending`으로 되돌린다. 단 `attempts ≥ 5`인 행은 `dead`로 보내고 `last_error = 'job lease expired'`를 기록한다. 프로세스를 죽이는 작업이 reap과 재실행을 무한 반복하지 않게 하기 위해서다. 반환값은 갱신한 행 수 전체다.
 - `PruneQueue`: `status = 'done'`이면서 `updated_at`이 `doneOlderThan`보다 오래된 행과 `status = 'dead'`이면서 `updated_at`이 `deadOlderThan`보다 오래된 행을 삭제하고 삭제한 행 수를 반환한다.
 
 ### 14.3 기타 연산
@@ -1102,7 +1103,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 
 ### 14.4 테스트
 
-`QUANTO_TEST_DATABASE_URL`이 없으면 skip한다. 테스트마다 무작위 이름의 스키마를 만들어 `search_path`로 격리하고 끝나면 삭제한다. 클라우드 세션에서 DB를 띄울 수 없으면, 통합 테스트는 푸시 후 GitHub Actions의 `integration` 잡에서 실행된 결과로 검증한다. 검증 항목: 마이그레이션 멱등성, 동시 마이그레이션(고루틴 두 개), 큐 중복 키, 동시 Dequeue에서 같은 작업을 두 번 잡지 않음(고루틴 8개 × 작업 100개), Fail 백오프와 dead 전이, Kill, Defer의 attempts 복구, ReapStale, PruneQueue, 딜리버리 중복, 통계 재계산, cascade 삭제.
+`QUANTO_TEST_DATABASE_URL`이 없으면 skip한다. 테스트마다 무작위 이름의 스키마를 만들어 `search_path`로 격리하고 끝나면 삭제한다. 클라우드 세션에서 DB를 띄울 수 없으면, 통합 테스트는 푸시 후 GitHub Actions의 `integration` 잡에서 실행된 결과로 검증한다. 검증 항목: 마이그레이션 멱등성, 동시 마이그레이션(고루틴 두 개), 큐 중복 키, 동시 Dequeue에서 같은 작업을 두 번 잡지 않음(고루틴 8개 × 작업 100개), Fail 백오프와 dead 전이, Kill, Defer의 attempts 복구, ReapStale, reap 후 이전 소유자의 Complete·Fail·Defer·Kill이 `ErrLeaseLost`를 받고 새 실행 상태를 바꾸지 않음, reap 5회 후 dead, PruneQueue, 딜리버리 중복, 통계 재계산, cascade 삭제.
 
 ---
 
@@ -1140,6 +1141,8 @@ func (s *Store) PendingCount(ctx) (int64, error)
 - `QUANTO_WORKER_CONCURRENCY`개 고루틴이 `Dequeue`를 반복한다. 비어 있으면 1초 + 0~250ms 지터만큼 쉰다.
 - 1분마다 `ReapStale(10m)`, 1시간마다 `PruneDeliveries(7일)`와 `PruneQueue(7일, 30일)`, 15초마다 큐 깊이 게이지를 갱신한다.
 - 핸들러는 `recover`로 감싼다. 패닉은 Fail로 기록한다.
+- 핸들러 호출마다 `context.WithTimeout(5분)`을 건다. 타임아웃은 Fail이다(`ReapStale`의 10분보다 짧아야 한다). 종료 신호로 인한 취소만 `Defer(now)`다.
+- `Complete`·`Fail`·`Defer`·`Kill`이 `store.ErrLeaseLost`를 반환하면 에러가 아니라 `lost lease` 경고 로그만 남기고, `quanto_queue_jobs_total`을 올리지 않는다.
 - `*github.RateLimitError`면 `Defer(Reset + 0~30s 지터)`, 페이로드 디코딩 실패처럼 재시도해도 결과가 같은 영구 오류면 `Kill`, 그 외 에러면 `Fail`, 성공이면 `Complete`다.
 - 종료 신호를 받으면 새 작업을 잡지 않고, 진행 중인 작업을 최대 60초 기다린다.
 
