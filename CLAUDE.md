@@ -902,7 +902,9 @@ Execution changes in 1 workflow file.
 
 `inspect`의 텍스트 출력은 사용자 유래 문자열(파일 경로, 워크플로 이름, 이벤트 이름, 필터 값, cron, 입력 이름, 권한 주체·스코프 이름·`read-all`/`write-all` 값, 잡 ID, runs-on 표기, needs, 잡 `uses`, 액션 Identity와 ref, 진단 메시지)을 값 하나씩 `report.Plain`으로 출력한다. 구조 문구와 계산된 값(인스턴스 수, 레벨, 분류, 고정 진단 코드)은 그대로 쓴다. JSON 출력은 `encoding/json`의 이스케이프에 맡긴다. 테스트는 제어 문자를 넣은 워크플로로 출력에 C0·DEL·C1 rune이 없음을 검증한다.
 
-`diff`의 종료 코드: 입력 파일을 읽지 못하면 1, 사용법 오류면 2, 그 외에는 파싱 실패로 `unanalyzable`이 나와도 0이다(분석 결과를 정상적으로 보고한 것이므로).
+`inspect`와 `diff`는 입력 파일을 `github.MaxFileSize`(256 KiB) 상한으로 읽는다. `io.LimitReader(file, MaxFileSize+1)`로 읽고, 상한을 넘으면 읽기 실패로 보고 `quanto: read <path>: file exceeds 256 KiB`를 stderr에 쓰고 종료 코드 1을 반환한다. 서버와 CLI가 같은 파일에 같은 결과를 내게 하기 위해서다.
+
+`diff`의 종료 코드: 입력 파일을 읽지 못하거나 상한을 넘으면 1, 사용법 오류면 2, 그 외에는 파싱 실패로 `unanalyzable`이 나와도 0이다(분석 결과를 정상적으로 보고한 것이므로).
 
 CLI 테스트는 `internal/cli`에서 `Run(args []string, stdout, stderr io.Writer) int` 형태로 호출해서 검증한다.
 
@@ -961,7 +963,7 @@ func (c *Client) RunJobs(ctx, owner, repo string, runID int64) ([]RunJob, error)
 
 - `MergeBase`는 `GET /repos/{o}/{r}/compare/{base}...{head}?per_page=1`의 `merge_base_commit.sha`를 반환한다. 비어 있으면 에러다.
 - `PullRequestFiles`는 최대 3000개까지 읽는다. `PullRequestFile{Filename, PreviousFilename, Status}`.
-- `FileContent`는 `GET /repos/{o}/{r}/contents/{path}?ref={ref}`에 `Accept: application/vnd.github.raw+json`을 쓴다. 404면 `(nil, false, nil)`이다. 경로 세그먼트는 URL 이스케이프한다. 본문은 `io.LimitReader(body, 1<<20+1)`로 읽는다. 1 MiB(`MaxFileSize = 1 << 20`)를 넘으면 `(nil, true, ErrFileTooLarge)`를 반환한다. `ErrFileTooLarge`의 메시지는 `file exceeds 1 MiB`다. 전체 본문을 메모리에 읽은 뒤 크기를 검사하지 않는다.
+- `FileContent`는 `GET /repos/{o}/{r}/contents/{path}?ref={ref}`에 `Accept: application/vnd.github.raw+json`을 쓴다. 404면 `(nil, false, nil)`이다. 경로 세그먼트는 URL 이스케이프한다. 본문은 `io.LimitReader(body, MaxFileSize+1)`로 읽는다. 256 KiB(`MaxFileSize = 256 << 10`)를 넘으면 `(nil, true, ErrFileTooLarge)`를 반환한다. `ErrFileTooLarge`의 메시지는 `file exceeds 256 KiB`다. 전체 본문을 메모리에 읽은 뒤 크기를 검사하지 않는다.
 - Check Run 어노테이션은 요청당 최대 50개다. `CreateCheckRun`은 첫 요청에 50개를 담아 생성하고, 나머지는 같은 Check Run에 `PATCH`로 50개씩 추가한다. 중간 배치가 실패하면 생성된 ID와 에러를 함께 반환한다. `status: completed`, `conclusion: neutral`, `name: quanto`(`CheckRunName`).
 - `FindCheckRun`은 `GET /repos/{o}/{r}/commits/{headSHA}/check-runs?check_name={name}&per_page=100`을 페이지네이션으로 읽고, `app.id`가 자기 App ID인 첫 Check Run의 ID를 반환한다. 없으면 `(0, false, nil)`이다.
 - `UpdateCheckRun`은 멱등 재개 방식이다. GitHub은 `PATCH`마다 어노테이션을 기존 목록에 덧붙이므로, 먼저 `GET /repos/{o}/{r}/check-runs/{id}`의 `output.annotations_count`(k)를 읽고 `Annotations[k:]`만 50개씩 `PATCH`한다(k는 `[0, len]`로 클램프). 보낼 어노테이션이 없어도 title과 summary를 갱신하는 `PATCH` 한 번을 보낸다. 같은 입력에 대해 어노테이션 순서가 결정적(10절)이라는 전제에 기대며, 재시도 사이에 입력이 바뀌면(예: 이력 통계 갱신) 이미 올라간 앞쪽 어노테이션은 고칠 수 없다.
@@ -1166,7 +1168,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 5. **merge-base.** 워크플로 파일이 하나라도 있으면 `MergeBase(base_sha, head_sha)`로 merge-base를 구한다. PR 파일 목록은 merge-base 기준 diff이므로 before 쪽도 merge-base에서 읽어야 한다. `base_sha`(base 브랜치 끝)에서 읽으면 PR을 연 뒤 base 브랜치가 같은 워크플로를 바꾼 경우 그 변경이 PR의 변경처럼(반대 방향으로) 보고된다. `analyses.base_sha`에도 merge-base를 저장한다. 실패는 일반 에러(Fail)다.
 6. 파일마다:
    - `added` → before 없음. `removed` → after 없음. `renamed` → before는 `PreviousFilename`, `OldPath`를 설정.
-   - `FileContent`로 before 쪽은 merge-base, head는 `head_sha`에서 읽는다. `github.ErrFileTooLarge`면 해당 쪽 에러는 `ErrFileTooLarge`(`file exceeds 1 MiB`)다.
+   - `FileContent`로 before 쪽은 merge-base, head는 `head_sha`에서 읽는다. `github.ErrFileTooLarge`면 해당 쪽 에러는 `ErrFileTooLarge`(`file exceeds 256 KiB`)다.
    - `source.Load` → `model.Parse`. 에러는 Input의 `BeforeErr`, `AfterErr`로 넘긴다.
 7. `store.Durations(repository_id)`로 DurationSource를 만든다.
 8. 파일별 `semdiff.Compare`.

@@ -15,9 +15,9 @@ import (
 	"github.com/BETAER-08/quanto/core/report"
 )
 
-const MaxFileSize = 1 << 20
+const MaxFileSize = 256 << 10
 
-var ErrFileTooLarge = errors.New("file exceeds 1 MiB")
+var ErrFileTooLarge = errors.New("file exceeds 256 KiB")
 
 const (
 	maxPullRequestFiles = 3000

@@ -9,6 +9,7 @@ import (
 	"github.com/BETAER-08/quanto/core/report"
 	"github.com/BETAER-08/quanto/core/semdiff"
 	"github.com/BETAER-08/quanto/core/source"
+	"github.com/BETAER-08/quanto/internal/github"
 )
 
 const devNull = "/dev/null"
@@ -22,7 +23,7 @@ func readSide(path string) (sideInput, error) {
 	if path == devNull {
 		return sideInput{}, nil
 	}
-	content, err := os.ReadFile(path)
+	content, err := readLimited(path)
 	if err != nil {
 		return sideInput{}, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -30,6 +31,22 @@ func readSide(path string) (sideInput, error) {
 		return sideInput{}, nil
 	}
 	return sideInput{content: content, present: true}, nil
+}
+
+func readLimited(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, github.MaxFileSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > github.MaxFileSize {
+		return nil, github.ErrFileTooLarge
+	}
+	return data, nil
 }
 
 func parseWorkflow(name string, content []byte) (*model.Workflow, []model.Diagnostic, error) {

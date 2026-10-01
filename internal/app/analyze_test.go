@@ -601,7 +601,7 @@ func TestAnalyzeFileLimitAndOversize(t *testing.T) {
 	}
 	small := readFixture(t, fixtureDir+"identical/before.yml")
 	h.gh.setContent(testBase, ".github/workflows/big.yml", small)
-	h.gh.setContent(testHead, ".github/workflows/big.yml", small+"#"+strings.Repeat("x", 1<<20))
+	h.gh.setContent(testHead, ".github/workflows/big.yml", small+"#"+strings.Repeat("x", github.MaxFileSize))
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
 	expectJob(t, h, "done", 1)
@@ -614,7 +614,7 @@ func TestAnalyzeFileLimitAndOversize(t *testing.T) {
 	if err := h.db.QueryRow(context.Background(), "SELECT result::text FROM analyses").Scan(&result); err != nil {
 		t.Fatalf("analysis: %v", err)
 	}
-	for _, want := range []string{`"skipped_files": 1`, `"status": "unanalyzable"`, `"error": "file exceeds 1 MiB"`} {
+	for _, want := range []string{`"skipped_files": 1`, `"status": "unanalyzable"`, `"error": "file exceeds 256 KiB"`} {
 		if !strings.Contains(result, want) {
 			t.Errorf("result lacks %s: %s", want, result)
 		}

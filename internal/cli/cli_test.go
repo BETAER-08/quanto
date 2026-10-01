@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/BETAER-08/quanto/internal/github"
 )
 
 var goldenRoot = filepath.Join("..", "..", "testdata", "golden", "semdiff")
@@ -237,6 +239,42 @@ func TestDiffReadError(t *testing.T) {
 	code, _, _ = run("diff", "/dev/null", t.TempDir())
 	if code != 1 {
 		t.Errorf("directory input exit = %d, want 1", code)
+	}
+}
+
+func paddedWorkflow(size int) string {
+	body := sampleWorkflow + "#"
+	return body + strings.Repeat("x", size-len(body))
+}
+
+func TestFileSizeLimit(t *testing.T) {
+	atLimit := writeTemp(t, "at.yml", paddedWorkflow(github.MaxFileSize))
+	over := writeTemp(t, "over.yml", paddedWorkflow(github.MaxFileSize+1))
+	tests := []struct {
+		name string
+		args []string
+		code int
+	}{
+		{"inspect at limit", []string{"inspect", atLimit}, 0},
+		{"inspect over limit", []string{"inspect", over}, 1},
+		{"diff at limit", []string{"diff", atLimit, atLimit}, 0},
+		{"diff before over limit", []string{"diff", over, atLimit}, 1},
+		{"diff after over limit", []string{"diff", "/dev/null", over}, 1},
+	}
+	for _, tt := range tests {
+		code, stdout, stderr := run(tt.args...)
+		if code != tt.code {
+			t.Errorf("%s: exit %d, want %d (stderr %q)", tt.name, code, tt.code, stderr)
+		}
+		if tt.code == 0 {
+			if stderr != "" {
+				t.Errorf("%s: stderr %q", tt.name, stderr)
+			}
+			continue
+		}
+		if stdout != "" || !strings.Contains(stderr, "file exceeds 256 KiB") || !strings.Contains(stderr, "over.yml") {
+			t.Errorf("%s: stdout %q stderr %q", tt.name, stdout, stderr)
+		}
 	}
 }
 

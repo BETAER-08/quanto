@@ -89,7 +89,7 @@ Exit codes: `0` success, `1` execution error (for example an unreadable input fi
 - Runner-minute estimates assume that future runs take as long as the average of the last 30 successful runs of each job, multiplied by the number of matrix instances. An estimate is shown only when every job before and after the change has at least 5 recorded runs and no matrix is dynamic. Queue time, retries, and skipped jobs are not modeled, and minutes are not converted to cost.
 - Job history is matched by job name. Jobs whose `name` contains an expression, and jobs whose names collide once the ` (...)` matrix suffix is removed, do not match their history, so the estimate is omitted.
 - Runs of reusable workflows (job names containing ` / `) are not recorded.
-- At most `QUANTO_MAX_WORKFLOW_FILES` (default 50) workflow files are analyzed per pull request; files larger than 1 MiB are reported as unanalyzable.
+- At most `QUANTO_MAX_WORKFLOW_FILES` (default 50) workflow files are analyzed per pull request; files larger than 256 KiB are reported as unanalyzable, and `quanto inspect` and `quanto diff` refuse them with exit code 1.
 - Schema validation of workflows is out of scope; use a dedicated linter for that.
 
 ## License

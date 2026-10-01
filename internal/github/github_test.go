@@ -703,7 +703,7 @@ func TestFileContentSizeLimit(t *testing.T) {
 		size int
 		ok   bool
 	}{
-		{"exactly 1 MiB", MaxFileSize, true},
+		{"exactly 256 KiB", MaxFileSize, true},
 		{"one byte over", MaxFileSize + 1, false},
 		{"far over", 16 * MaxFileSize, false},
 	}
@@ -729,7 +729,7 @@ func TestFileContentSizeLimit(t *testing.T) {
 		if !errors.Is(err, ErrFileTooLarge) || data != nil {
 			t.Errorf("%s: FileContent = %d bytes, %v, %v", tt.name, len(data), ok, err)
 		}
-		if err != nil && err.Error() != "file exceeds 1 MiB" {
+		if err != nil && err.Error() != "file exceeds 256 KiB" {
 			t.Errorf("%s: error = %q", tt.name, err)
 		}
 	}

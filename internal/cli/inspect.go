@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -83,7 +82,7 @@ func runInspect(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 	path := positional[0]
-	content, err := os.ReadFile(path)
+	content, err := readLimited(path)
 	if err != nil {
 		fmt.Fprintf(stderr, "quanto: read %s: %v\n", path, err)
 		return exitError
