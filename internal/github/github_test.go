@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -460,6 +461,115 @@ func TestTokenCachePerInstallation(t *testing.T) {
 	}
 	if f.tokenCalls.Load() != 1 || other.Load() != 1 {
 		t.Errorf("token calls = %d/%d", f.tokenCalls.Load(), other.Load())
+	}
+}
+
+func cachedInstallations(c *AppClient) []int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var ids []int64
+	for id := range c.tokens {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
+func TestTokenCacheEvictsExpiredOnRefresh(t *testing.T) {
+	f := newFake(t)
+	f.handle("POST /app/installations/88/access_tokens", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusCreated, map[string]any{"token": "other", "expires_at": f.clock.Now().Add(time.Hour).Format(time.RFC3339)})
+	})
+	app := f.appClient(t, nil)
+	ctx := context.Background()
+	if _, err := app.installationToken(ctx, testInstallID); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(cachedInstallations(app)); got != "[77]" {
+		t.Fatalf("cache = %s", got)
+	}
+	f.clock.Advance(30 * time.Minute)
+	if _, err := app.installationToken(ctx, 88); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(cachedInstallations(app)); got != "[77 88]" {
+		t.Fatalf("live token evicted: %s", got)
+	}
+	f.clock.Advance(31 * time.Minute)
+	f.handle("POST /app/installations/99/access_tokens", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusCreated, map[string]any{"token": "third", "expires_at": f.clock.Now().Add(time.Hour).Format(time.RFC3339)})
+	})
+	if _, err := app.installationToken(ctx, 99); err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(cachedInstallations(app)); got != "[88 99]" {
+		t.Fatalf("expired token kept: %s", got)
+	}
+	tok, err := app.installationToken(ctx, testInstallID)
+	if err != nil || tok != testToken+"2" {
+		t.Fatalf("token after eviction = %q, %v", tok, err)
+	}
+}
+
+func TestPruneTokens(t *testing.T) {
+	f := newFake(t)
+	app := f.appClient(t, nil)
+	ctx := context.Background()
+	if _, err := app.installationToken(ctx, testInstallID); err != nil {
+		t.Fatal(err)
+	}
+	f.handle("POST /app/installations/55/access_tokens", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, http.StatusInternalServerError, map[string]any{"message": "boom"})
+	})
+	if _, err := app.installationToken(ctx, 55); err == nil {
+		t.Fatal("expected token error")
+	}
+	if n := app.PruneTokens(); n != 1 {
+		t.Fatalf("pruned = %d, want failed entry only", n)
+	}
+	if got := fmt.Sprint(cachedInstallations(app)); got != "[77]" {
+		t.Fatalf("cache = %s", got)
+	}
+	f.clock.Advance(time.Hour)
+	if n := app.PruneTokens(); n != 1 {
+		t.Fatalf("pruned = %d, want expired entry", n)
+	}
+	if got := len(cachedInstallations(app)); got != 0 {
+		t.Fatalf("cache size = %d", got)
+	}
+	locked := app.entry(testInstallID)
+	locked.mu.Lock()
+	if n := app.PruneTokens(); n != 0 {
+		t.Fatalf("pruned locked entry")
+	}
+	locked.mu.Unlock()
+}
+
+func TestTokenCacheConcurrentWithPrune(t *testing.T) {
+	f := newFake(t)
+	app := f.appClient(t, nil)
+	var wg sync.WaitGroup
+	errs := make(chan error, 200)
+	for i := 0; i < 100; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			if _, err := app.installationToken(context.Background(), testInstallID); err != nil {
+				errs <- err
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			app.PruneTokens()
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	if n := f.tokenCalls.Load(); n < 1 || n > 100 {
+		t.Fatalf("token calls = %d", n)
 	}
 }
 

@@ -196,6 +196,11 @@ func (a *App) maintain(ctx context.Context) {
 			} else if n > 0 {
 				a.logger.Info("pruned queue jobs", "count", n)
 			}
+			if a.github != nil {
+				if n := a.github.PruneTokens(); n > 0 {
+					a.logger.Info("pruned installation tokens", "count", n)
+				}
+			}
 		case <-depth.C:
 			a.updateDepth(ctx)
 		}

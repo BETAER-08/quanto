@@ -346,6 +346,7 @@ type tokenEntry struct {
 	mu        sync.Mutex
 	token     string
 	expiresAt time.Time
+	removed   bool
 }
 
 func NewAppClient(opts Options) (*AppClient, error) {
@@ -412,12 +413,29 @@ func (c *AppClient) entry(installationID int64) *tokenEntry {
 }
 
 func (c *AppClient) installationToken(ctx context.Context, installationID int64) (string, error) {
-	e := c.entry(installationID)
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if e.token != "" && c.t.now().Before(e.expiresAt.Add(-tokenRefresh)) {
-		return e.token, nil
+	for {
+		e := c.entry(installationID)
+		e.mu.Lock()
+		if e.removed {
+			e.mu.Unlock()
+			continue
+		}
+		if e.token != "" && c.t.now().Before(e.expiresAt.Add(-tokenRefresh)) {
+			token := e.token
+			e.mu.Unlock()
+			return token, nil
+		}
+		token, err := c.refreshToken(ctx, installationID, e)
+		e.mu.Unlock()
+		if err != nil {
+			return "", err
+		}
+		c.PruneTokens()
+		return token, nil
 	}
+}
+
+func (c *AppClient) refreshToken(ctx context.Context, installationID int64, e *tokenEntry) (string, error) {
 	auth, err := c.jwtAuth()
 	if err != nil {
 		return "", err
@@ -436,6 +454,25 @@ func (c *AppClient) installationToken(ctx context.Context, installationID int64)
 	e.token = payload.Token
 	e.expiresAt = payload.ExpiresAt
 	return e.token, nil
+}
+
+func (c *AppClient) PruneTokens() int {
+	now := c.t.now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	removed := 0
+	for id, e := range c.tokens {
+		if !e.mu.TryLock() {
+			continue
+		}
+		if e.token == "" || !now.Before(e.expiresAt) {
+			e.removed = true
+			delete(c.tokens, id)
+			removed++
+		}
+		e.mu.Unlock()
+	}
+	return removed
 }
 
 type Client struct {

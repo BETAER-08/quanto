@@ -927,7 +927,7 @@ CLI 테스트는 `internal/cli`에서 `Run(args []string, stdout, stderr io.Writ
 표준 라이브러리 `net/http`로 구현한다.
 
 - **App JWT (RS256).** 헤더는 `{"alg":"RS256","typ":"JWT"}`, 클레임은 `iat = now - 60s`, `exp = now + 540s`, `iss = App ID 문자열`이다. PEM은 PKCS#1과 PKCS#8 둘 다 받는다. base64url은 패딩 없이 쓴다.
-- **설치 토큰.** `POST /app/installations/{id}/access_tokens`. 설치 ID별로 메모리에 캐시하고, 만료 5분 전에 갱신한다. 같은 설치에 대한 동시 갱신은 하나로 합친다(설치 ID별 뮤텍스).
+- **설치 토큰.** `POST /app/installations/{id}/access_tokens`. 설치 ID별로 메모리에 캐시하고, 만료 5분 전에 갱신한다. 같은 설치에 대한 동시 갱신은 하나로 합친다(설치 ID별 뮤텍스). 만료된 엔트리(토큰이 없거나 `expires_at`이 지난 것)는 토큰을 새로 받은 직후와 `PruneTokens()`(워커의 1시간 주기 작업) 호출 때 캐시에서 제거한다. 제거는 맵 잠금 아래에서 엔트리 뮤텍스를 `TryLock`으로만 잡아 사용 중인 엔트리를 건너뛰고, 제거된 엔트리에는 표시를 남겨 그 엔트리를 이미 잡은 호출이 새 엔트리로 다시 시도하게 한다(교착 없음).
 - **공통 헤더.** `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`, `User-Agent: quanto/<version>`.
 - **타임아웃.** `http.Client.Timeout = 30s`이고 모든 호출에 context를 전달한다.
 - **페이지네이션.** `Link` 헤더의 `rel="next"`를 따라간다. `per_page=100`이다.
@@ -1141,7 +1141,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 ### 15.2 worker 역할
 
 - `QUANTO_WORKER_CONCURRENCY`개 고루틴이 `Dequeue`를 반복한다. 비어 있으면 1초 + 0~250ms 지터만큼 쉰다.
-- 1분마다 `ReapStale(10m)`, 1시간마다 `PruneDeliveries(7일)`와 `PruneQueue(7일, 30일)`, 15초마다 큐 깊이 게이지를 갱신한다.
+- 1분마다 `ReapStale(10m)`, 1시간마다 `PruneDeliveries(7일)`, `PruneQueue(7일, 30일)`, 설치 토큰 캐시 `PruneTokens()`, 15초마다 큐 깊이 게이지를 갱신한다.
 - 핸들러는 `recover`로 감싼다. 패닉은 Fail로 기록한다.
 - 핸들러 호출마다 `context.WithTimeout(5분)`을 건다. 타임아웃은 Fail이다(`ReapStale`의 10분보다 짧아야 한다). 종료 신호로 인한 취소만 `Defer(now)`다.
 - `Complete`·`Fail`·`Defer`·`Kill`이 `store.ErrLeaseLost`를 반환하면 에러가 아니라 `lost lease` 경고 로그만 남기고, `quanto_queue_jobs_total`을 올리지 않는다.
