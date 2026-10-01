@@ -752,7 +752,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 - **워크플로 추가·삭제.** `workflow.added` 또는 `workflow.removed` 하나만 낸다. 존재하는 쪽의 Metrics만 채운다.
 - **트리거.** `pull_request_target`이 추가되면 `trigger.pull_request_target_added`만 내고 `trigger.added`는 내지 않는다. `schedule`은 `trigger.added`·`trigger.removed` 대상에서 제외하고, 추가·삭제·변경 모두 `trigger.schedule_changed` 하나로 낸다. 없는 쪽은 `(none)`이다. cron 목록은 정렬해서 비교·표기한다.
 - **매트릭스.** 잡의 인스턴스 수가 256 이하(또는 잡 없음, 동적)에서 256 초과로 새로 넘으면 `matrix.over_limit`만 내고 `matrix.count_changed`는 내지 않는다. 이미 256을 넘던 매트릭스의 수가 바뀌면 `matrix.count_changed`만 낸다. `matrix.dynamic`은 after가 동적이고 before가 동적이 아니거나 잡이 없을 때 낸다. 동적 → 정적 전환은 `matrix.count_changed`(`?` → N, Normal)다. 추가된 잡도 `matrix.dynamic`, `matrix.over_limit` 대상이다.
-- **그래프.** 어느 쪽이든 동적 매트릭스가 있으면 `graph.width_changed`를 내지 않는다. 어느 쪽이든 순환이 있으면 `graph.depth_changed`와 `graph.width_changed`를 내지 않는다.
+- **그래프.** 어느 쪽이든 동적 매트릭스가 있으면 `graph.width_changed`를 내지 않는다. 어느 쪽이든 순환이 있으면 `graph.depth_changed`와 `graph.width_changed`를 내지 않는다. 같은 파일에 `matrix.count_changed`, `matrix.over_limit`, `matrix.dynamic` 중 하나라도 있고 잡 ID 집합과 해석된 `needs` 간선 집합이 전후 같으면 `graph.width_changed`를 내지 않는다(너비 변화가 매트릭스 변화에서만 나온 것이므로 중복 보고다). Metrics 표의 `Max concurrent jobs` 행은 그대로 둔다.
 - **액션·재사용 워크플로.** 재사용 워크플로를 호출하는 잡의 `uses`도 스텝 액션과 같은 규칙으로 비교한다. Identity는 `lower(owner/repo/path)`, local이면 경로다. 서드파티 판정은 `!Local && !Docker && !FirstParty`이고 docker·local은 `action.added`로 낸다. ref 집합이 바뀐 경우, 전의 ref가 전부 SHA이고 후에 SHA가 아닌 ref가 있으면 `action.pin_removed` 하나만, 그 외는 `action.ref_changed` 하나만 낸다.
 - **runs-on 표기.** 라벨을 정렬해 `, `로 연결한다. group이 있으면 앞에 `group <g>: `를 붙인다. 없으면 `(none)`이다. 라벨 순서만 바뀐 경우는 변경이 아니다.
 - **추정.** `RunnerMinutes`는 각 쪽에서 독립적으로 추정이 가능하면 채운다. `Estimate`와 `estimate.changed`는 양쪽 모두 가능할 때만 만든다. `Estimate.Samples`는 전후 잡별 샘플 수의 최솟값이다.
@@ -784,7 +784,7 @@ Findings는 (중요도 내림차순, Kind를 위 표 순서로, Subject 사전�
 4. `matrix-include-docs` (7.3의 문서 예제를 잡 매트릭스로)
 5. `matrix-exclude` (12 → 9)
 6. `matrix-dynamic` → `matrix.dynamic` 1건만
-7. `matrix-over-limit` → `matrix.over_limit`, `graph.width_changed`
+7. `matrix-over-limit` → `matrix.over_limit` 1건만
 8. `permissions-broadened` (contents read → write)
 9. `permissions-removed`
 10. `permissions-write-all`

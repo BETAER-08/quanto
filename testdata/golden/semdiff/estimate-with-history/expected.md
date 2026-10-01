@@ -14,7 +14,6 @@ Execution changes in 1 workflow file.
 
 - Job `test` matrix: 2 → 4 jobs
 - Estimated runner minutes per run: 25 → 45 (10 historical runs per job)
-- Max concurrent jobs: 2 → 4
 
 ---
 <sub>Static analysis of workflow files only. No code from this pull request was executed. Commit `abc1234`.</sub>

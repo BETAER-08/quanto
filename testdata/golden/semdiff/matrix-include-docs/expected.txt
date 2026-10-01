@@ -2,4 +2,3 @@
   Jobs per run: 4 → 6
   Max concurrent jobs: 4 → 6
   - [normal] Job `example` matrix: 4 → 6 jobs
-  - [normal] Max concurrent jobs: 4 → 6

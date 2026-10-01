@@ -2,4 +2,3 @@
   Jobs per run: 256 → 272
   Max concurrent jobs: 256 → 272
   - [high] Job `grid` matrix expands to 272 jobs (GitHub limit: 256)
-  - [normal] Max concurrent jobs: 256 → 272

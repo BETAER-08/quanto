@@ -479,3 +479,20 @@ func TestWidthText(t *testing.T) {
 		}
 	}
 }
+
+func TestWidthSuppressedForMatrixOnlyChange(t *testing.T) {
+	before := "on: push\njobs:\n  a: {runs-on: x, strategy: {matrix: {v: [1, 2]}}, steps: [{run: a}]}\n  b: {runs-on: x, needs: a, steps: [{run: b}]}\n"
+	after := "on: push\njobs:\n  a: {runs-on: x, strategy: {matrix: {v: [1, 2, 3, 4]}}, steps: [{run: a}]}\n  b: {runs-on: x, needs: a, steps: [{run: b}]}\n"
+	d := diff(t, before, after)
+	if got := kindList(d); !reflect.DeepEqual(got, []string{kindMatrixCountChanged}) {
+		t.Errorf("matrix only kinds = %v", got)
+	}
+	if d.Before.Width != "2" || d.After.Width != "4" {
+		t.Errorf("width metrics = %q, %q", d.Before.Width, d.After.Width)
+	}
+	graphChanged := strings.Replace(after, "  b: {runs-on: x, needs: a, ", "  b: {runs-on: x, ", 1)
+	d = diff(t, before, graphChanged)
+	if n := len(findingsOf(d, kindGraphWidthChanged)); n != 1 {
+		t.Errorf("needs changed kinds = %v", kindList(d))
+	}
+}

@@ -12,7 +12,6 @@ Execution changes in 1 workflow file.
 | Max concurrent jobs | 256 | 272 |
 
 - Job `grid` matrix expands to 272 jobs (GitHub limit: 256)
-- Max concurrent jobs: 256 → 272
 
 ---
 <sub>Static analysis of workflow files only. No code from this pull request was executed. Commit `abc1234`.</sub>

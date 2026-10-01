@@ -12,7 +12,6 @@ Execution changes in 1 workflow file.
 | Max concurrent jobs | 7 | 25 |
 
 - Job `test` matrix: 6 → 24 jobs
-- Max concurrent jobs: 7 → 25
 
 ---
 <sub>Static analysis of workflow files only. No code from this pull request was executed. Commit `abc1234`.</sub>

@@ -3,6 +3,7 @@ package semdiff
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 
 	"github.com/BETAER-08/quanto/core/graph"
@@ -230,7 +231,7 @@ func (c *comparer) graphChanges() {
 			Pos:    a.wf.JobsPos,
 		})
 	}
-	if b.unknown || a.unknown {
+	if b.unknown || a.unknown || c.widthFromMatrixOnly() {
 		return
 	}
 	if b.metrics.Width != a.metrics.Width {
@@ -241,6 +242,29 @@ func (c *comparer) graphChanges() {
 			Pos:    a.wf.JobsPos,
 		})
 	}
+}
+
+func (c *comparer) widthFromMatrixOnly() bool {
+	matrixFinding := false
+	for _, f := range c.diff.Findings {
+		switch f.Kind {
+		case kindMatrixCountChanged, kindMatrixOverLimit, kindMatrixDynamic:
+			matrixFinding = true
+		}
+	}
+	if !matrixFinding {
+		return false
+	}
+	bg, ag := c.before.graph, c.after.graph
+	if !slices.Equal(bg.Jobs, ag.Jobs) {
+		return false
+	}
+	for _, id := range bg.Jobs {
+		if !slices.Equal(bg.Needs[id], ag.Needs[id]) {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *side) needsPos(e graph.Edge) source.Position {
