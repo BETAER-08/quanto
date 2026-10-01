@@ -834,17 +834,19 @@ func Annotations(diffs []*semdiff.FileDiff) []Annotation
 func Text(diffs []*semdiff.FileDiff) string
 func JSON(diffs []*semdiff.FileDiff, meta Meta) ([]byte, error)
 func NoChanges(headSHA string) string
+func Plain(s string) string
 ```
 
 - `Publishable`: Normal 이상 Finding이 하나라도 있으면 true다.
 - `Message`: 9.4 표의 문구를 만든다.
-- **사용자 유래 문자열 출력 규칙(마크다운 주입 방지).** YAML 값·키, 잡 ID, 잡 이름, 액션 참조, 파일 경로, cron, 브랜치 필터, runs-on, concurrency, timeout, 에러 메시지, 커밋 SHA 등 PR 내용이나 외부 입력에서 온 문자열은 `core/report`의 비공개 함수 `inline` 하나로만 출력한다. 다른 경로로 사용자 문자열을 출력하는 곳이 없어야 한다. `inline`은 다음을 순서대로 적용한다.
-  1. CR, LF, 탭과 기타 제어 문자(`unicode.IsControl`)를 각각 공백 하나로 바꾼다.
+- **사용자 유래 문자열 출력 규칙(마크다운 주입 방지).** YAML 값·키, 잡 ID, 잡 이름, 액션 참조, 파일 경로, cron, 브랜치 필터, runs-on, concurrency, timeout, 에러 메시지, 커밋 SHA 등 PR 내용이나 외부 입력에서 온 문자열은 `core/report`의 비공개 함수 `inline` 하나로만 출력한다. 다른 경로로 사용자 문자열을 출력하는 곳이 없어야 한다. 예외는 펜스 없는 터미널 평문 출력뿐이며, 이 경우는 공개 함수 `Plain`(아래 1~2단계)으로만 출력한다. `inline`은 다음을 순서대로 적용한다.
+  1. CR, LF, 탭과 기타 제어 문자(`unicode.IsControl`: C0, DEL, C1. ANSI ESC 포함)를 각각 공백 하나로 바꾼다.
   2. 80 rune을 넘으면 앞 79 rune + `…`로 자른다.
   3. 내부의 가장 긴 연속 백틱보다 하나 더 긴 백틱 펜스로 감싼다. 내용이 백틱으로 시작하거나 끝나면 펜스 안쪽 양쪽에 공백을 하나씩 넣는다. 내용이 비었으면 `` ` ` ``(공백 하나짜리 코드 스팬)를 낸다. 빈 펜스 ```` `` ````는 뒤따르는 코드 스팬과 짝이 어긋나 주입 경로가 되기 때문이다.
 - 9.4 표의 `{subject}`, `{before}`, `{after}`, `{detail}` 중 사용자 유래 값은 표에 백틱 표기가 있든 없든 필드 전체를 `inline`으로 출력한다. 필터 목록, 스케줄 표기(`'0 * * * *' (24 runs/day)`), runs-on 표기, `(none)`, 순환 경로(`a → b → a`)는 필드 하나로 감싼다. 권한 스코프 표기 `job `+"`id`"는 `job ` + `inline(id)`로 출력한다. `action.third_party_added`의 `{detail}`은 비어 있지 않으면 고정 문구 ` (mutable ref)`를 낸다.
 - 숫자 필드(매트릭스 수, 그래프 깊이·너비, 추정 분, 샘플 수, Metrics 표의 값)는 `?`, 10진 정수, `≥` + 10진 정수일 때만 그대로 쓰고, 그 외 값은 `inline`으로 출력한다.
 - `Markdown`, `CheckSummary`, `Annotations`(message와 title), `Text`, `NoChanges` 전부 이 규칙을 따른다. `Text`의 파일 경로 줄도 `inline`을 거친다.
+- `Plain(s)`: `inline`의 1~2단계만 적용하고 펜스는 씌우지 않는다. `inline`은 `Plain`의 결과에 3단계를 적용하므로 두 출력의 정리 규칙은 같다. 테스트는 `ESC[31m`(색상), `ESC]0;title BEL`(창 제목), `\r` 덮어쓰기, C1 `CSI`, DEL, 80·81 rune 경계를 검증한다.
 - `NoChanges(headSHA string) string`은 15.3의 "변화 없음" 코멘트 본문을 만든다: `CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit " + inline(sha7) + ".\n"`.
 - `Markdown`의 형식은 다음과 같다. 파일은 경로 사전순이다. 표는 Metrics 값이 전후로 하나라도 다를 때만 넣는다. 추정 행은 양쪽 값이 있을 때만 넣는다. Low Finding은 코멘트에 넣지 않는다.
 
@@ -897,6 +899,8 @@ Execution changes in 1 workflow file.
 | `quanto serve --role web\|worker\|all` | 페이즈 6에서 추가 |
 | `quanto migrate` | 페이즈 6에서 추가 |
 | `quanto manifest --webhook-url <url> --homepage-url <url> [--name quanto]` | 페이즈 7에서 추가. GitHub App manifest JSON 출력 |
+
+`inspect`의 텍스트 출력은 사용자 유래 문자열(파일 경로, 워크플로 이름, 이벤트 이름, 필터 값, cron, 입력 이름, 권한 주체·스코프 이름·`read-all`/`write-all` 값, 잡 ID, runs-on 표기, needs, 잡 `uses`, 액션 Identity와 ref, 진단 메시지)을 값 하나씩 `report.Plain`으로 출력한다. 구조 문구와 계산된 값(인스턴스 수, 레벨, 분류, 고정 진단 코드)은 그대로 쓴다. JSON 출력은 `encoding/json`의 이스케이프에 맡긴다. 테스트는 제어 문자를 넣은 워크플로로 출력에 C0·DEL·C1 rune이 없음을 검증한다.
 
 `diff`의 종료 코드: 입력 파일을 읽지 못하면 1, 사용법 오류면 2, 그 외에는 파싱 실패로 `unanalyzable`이 나와도 0이다(분석 결과를 정상적으로 보고한 것이므로).
 

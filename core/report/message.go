@@ -10,7 +10,7 @@ import (
 
 const maxInlineRunes = 80
 
-func inline(s string) string {
+func Plain(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		if unicode.IsControl(r) {
@@ -23,6 +23,11 @@ func inline(s string) string {
 	if utf8.RuneCountInString(text) > maxInlineRunes {
 		text = string([]rune(text)[:maxInlineRunes-1]) + "…"
 	}
+	return text
+}
+
+func inline(s string) string {
+	text := Plain(s)
 	longest, run := 0, 0
 	for _, r := range text {
 		if r == '`' {

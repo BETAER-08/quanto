@@ -410,3 +410,61 @@ func TestDeterministicOrder(t *testing.T) {
 		t.Errorf("check summary depends on input order")
 	}
 }
+
+func TestPlain(t *testing.T) {
+	long := strings.Repeat("a", 81)
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"empty", "", ""},
+		{"plain", "ubuntu-latest", "ubuntu-latest"},
+		{"ansi color", "\x1b[31mred\x1b[0m", " [31mred [0m"},
+		{"osc title", "\x1b]0;title\x07rest", " ]0;title rest"},
+		{"carriage return overwrite", "safe\rEVIL", "safe EVIL"},
+		{"c1 csi", "a\u009b31mb", "a 31mb"},
+		{"del", "a\x7fb", "a b"},
+		{"newline and tab", "a\nb\tc", "a b c"},
+		{"backticks kept", "`x`", "`x`"},
+		{"korean", "한글", "한글"},
+		{"exactly 80", strings.Repeat("a", 80), strings.Repeat("a", 80)},
+		{"81 runes", long, strings.Repeat("a", 79) + "…"},
+		{"81 korean runes", strings.Repeat("가", 81), strings.Repeat("가", 79) + "…"},
+	}
+	for _, tt := range tests {
+		got := Plain(tt.in)
+		if got != tt.want {
+			t.Errorf("%s: Plain(%q) = %q, want %q", tt.name, tt.in, got, tt.want)
+		}
+		if utf8.RuneCountInString(got) > 80 {
+			t.Errorf("%s: %d runes", tt.name, utf8.RuneCountInString(got))
+		}
+		for _, r := range got {
+			if r < 0x20 || (r >= 0x7f && r <= 0x9f) {
+				t.Errorf("%s: control rune %U in %q", tt.name, r, got)
+			}
+		}
+	}
+}
+
+func TestTextStripsTerminalControls(t *testing.T) {
+	d := &semdiff.FileDiff{
+		Path:   ".github/workflows/\x1b[31mci\x1b]0;title\x07.yml",
+		Status: semdiff.StatusModified,
+		Before: semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: 1},
+		After:  semdiff.Metrics{JobsPerRun: "1", Depth: 1, Width: 1},
+		Findings: []semdiff.Finding{
+			{Kind: "job.added", Significance: semdiff.Normal, Subject: "safe\rEVIL"},
+		},
+	}
+	out := Text([]*semdiff.FileDiff{d})
+	for _, bad := range []string{"\x1b", "\x07", "\r"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("text output contains %q: %q", bad, out)
+		}
+	}
+	if !strings.Contains(out, "Job added: `safe EVIL`") {
+		t.Errorf("text output = %q", out)
+	}
+}

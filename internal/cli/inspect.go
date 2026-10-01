@@ -11,6 +11,7 @@ import (
 
 	"github.com/BETAER-08/quanto/core/matrix"
 	"github.com/BETAER-08/quanto/core/model"
+	"github.com/BETAER-08/quanto/core/report"
 	"github.com/BETAER-08/quanto/core/semdiff"
 	"github.com/BETAER-08/quanto/core/source"
 )
@@ -292,7 +293,7 @@ func permissionText(p inspectPermission) string {
 	case !p.Declared:
 		return "not declared"
 	case p.All != "":
-		return p.All
+		return report.Plain(p.All)
 	case len(p.Scopes) == 0:
 		return "{}"
 	}
@@ -303,7 +304,7 @@ func permissionText(p inspectPermission) string {
 	sort.Strings(keys)
 	parts := make([]string, len(keys))
 	for i, k := range keys {
-		parts[i] = k + ": " + p.Scopes[k]
+		parts[i] = report.Plain(k) + ": " + p.Scopes[k]
 	}
 	return strings.Join(parts, ", ")
 }
@@ -316,24 +317,33 @@ func triggerText(t inspectTrigger) string {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		parts = append(parts, k+": "+strings.Join(t.Filters[k], ", "))
+		parts = append(parts, k+": "+plainList(t.Filters[k]))
 	}
 	for _, c := range t.Crons {
-		parts = append(parts, "cron: '"+c+"'")
+		parts = append(parts, "cron: '"+report.Plain(c)+"'")
 	}
 	if len(t.Inputs) > 0 {
-		parts = append(parts, "inputs: "+strings.Join(t.Inputs, ", "))
+		parts = append(parts, "inputs: "+plainList(t.Inputs))
 	}
+	event := report.Plain(t.Event)
 	if len(parts) == 0 {
-		return t.Event
+		return event
 	}
-	return t.Event + " (" + strings.Join(parts, "; ") + ")"
+	return event + " (" + strings.Join(parts, "; ") + ")"
+}
+
+func plainList(values []string) string {
+	out := make([]string, len(values))
+	for i, v := range values {
+		out[i] = report.Plain(v)
+	}
+	return strings.Join(out, ", ")
 }
 
 func actionText(a inspectAction) string {
-	text := a.Identity
+	text := report.Plain(a.Identity)
 	if a.Ref != "" {
-		text += "@" + a.Ref
+		text += "@" + report.Plain(a.Ref)
 	}
 	text += " (" + a.Category
 	if a.Pin != "" {
@@ -344,8 +354,8 @@ func actionText(a inspectAction) string {
 
 func renderInspect(rep inspectReport) string {
 	var b strings.Builder
-	b.WriteString("File: " + rep.File + "\n")
-	b.WriteString("Name: " + orNone(rep.Name) + "\n")
+	b.WriteString("File: " + report.Plain(rep.File) + "\n")
+	b.WriteString("Name: " + orNone(report.Plain(rep.Name)) + "\n")
 	b.WriteString("Triggers:\n")
 	if len(rep.Triggers) == 0 {
 		b.WriteString("  (none)\n")
@@ -355,7 +365,7 @@ func renderInspect(rep inspectReport) string {
 	}
 	b.WriteString("Permissions:\n")
 	for _, p := range rep.Permissions {
-		b.WriteString("  " + p.Subject + ": " + permissionText(p) + "\n")
+		b.WriteString("  " + report.Plain(p.Subject) + ": " + permissionText(p) + "\n")
 	}
 	b.WriteString("Jobs per run: " + rep.JobsPerRun + "\n")
 	b.WriteString("Longest needs chain: " + strconv.Itoa(rep.Depth) + "\n")
@@ -365,12 +375,12 @@ func renderInspect(rep inspectReport) string {
 		b.WriteString("  (none)\n")
 	}
 	for _, j := range rep.Jobs {
-		line := "  " + j.ID + ": instances: " + j.Instances + ", runs-on: " + j.RunsOn
+		line := "  " + report.Plain(j.ID) + ": instances: " + j.Instances + ", runs-on: " + report.Plain(j.RunsOn)
 		if len(j.Needs) > 0 {
-			line += ", needs: " + strings.Join(j.Needs, ", ")
+			line += ", needs: " + plainList(j.Needs)
 		}
 		if j.Uses != "" {
-			line += ", uses: " + j.Uses
+			line += ", uses: " + report.Plain(j.Uses)
 		}
 		b.WriteString(line + "\n")
 	}
@@ -386,7 +396,7 @@ func renderInspect(rep inspectReport) string {
 		b.WriteString("  (none)\n")
 	}
 	for _, d := range rep.Diagnostics {
-		b.WriteString(fmt.Sprintf("  %d:%d %s %s\n", d.Line, d.Column, d.Code, d.Message))
+		b.WriteString(fmt.Sprintf("  %d:%d %s %s\n", d.Line, d.Column, d.Code, report.Plain(d.Message)))
 	}
 	return b.String()
 }

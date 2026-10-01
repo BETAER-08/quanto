@@ -285,6 +285,51 @@ func TestInspectText(t *testing.T) {
 	}
 }
 
+const hostileWorkflow = `name: "\e[31mred\e[0m"
+on:
+  "\e]0;title\apush": {}
+jobs:
+  "\e]0;pwned\aci":
+    runs-on: "safe\rEVIL"
+    needs: "\e[2Jclear"
+    steps:
+      - uses: "evil/act\u009b31m@v1"
+      - run: echo
+  "\e[2Jclear":
+    runs-on: x
+    steps:
+      - run: echo
+`
+
+func TestInspectStripsTerminalControls(t *testing.T) {
+	long := strings.Repeat("j", 100)
+	wf := writeTemp(t, "ci.yml", hostileWorkflow+"  "+long+":\n    runs-on: x\n    steps:\n      - run: echo\n")
+	code, stdout, stderr := run("inspect", wf)
+	if code != 0 || stderr != "" {
+		t.Fatalf("exit %d stderr %q", code, stderr)
+	}
+	for _, r := range stdout {
+		if r == '\n' {
+			continue
+		}
+		if r < 0x20 || (r >= 0x7f && r <= 0x9f) {
+			t.Fatalf("control rune %U in inspect output %q", r, stdout)
+		}
+	}
+	want := []string{
+		"Name:  [31mred [0m\n",
+		"   ]0;title push\n",
+		"   ]0;pwned ci: instances: 1, runs-on: safe EVIL, needs:  [2Jclear\n",
+		"  evil/act 31m@v1 (third-party, mutable)\n",
+		"  " + strings.Repeat("j", 79) + "…: instances: 1",
+	}
+	for _, w := range want {
+		if !strings.Contains(stdout, w) {
+			t.Errorf("inspect output lacks %q\n%s", w, stdout)
+		}
+	}
+}
+
 func TestInspectJSON(t *testing.T) {
 	wf := writeTemp(t, "ci.yml", sampleWorkflow)
 	code, stdout, _ := run("inspect", "--format", "json", wf)
