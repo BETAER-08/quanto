@@ -619,8 +619,11 @@ func TestAnalyzeFileLimitAndOversize(t *testing.T) {
 			t.Errorf("result lacks %s: %s", want, result)
 		}
 	}
-	comments := h.gh.find("POST", "/issues/3/comments")
-	if len(comments) != 1 || !strings.Contains(comments[0].Body, "1 additional workflow file was not analyzed.") {
-		t.Fatalf("comments = %+v", comments)
+	if comments := h.gh.find("POST", "/issues/3/comments"); len(comments) != 0 {
+		t.Fatalf("unanalyzable file alone created a comment: %+v", comments)
+	}
+	checks := h.gh.find("POST", "/check-runs")
+	if len(checks) != 1 || !strings.Contains(checks[0].Body, "1 additional workflow file was not analyzed.") || !strings.Contains(checks[0].Body, "file exceeds 256 KiB") {
+		t.Fatalf("check runs = %+v", checks)
 	}
 }

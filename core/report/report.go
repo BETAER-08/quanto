@@ -3,6 +3,7 @@ package report
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/BETAER-08/quanto/core/semdiff"
 )
@@ -33,9 +34,18 @@ func Publishable(diffs []*semdiff.FileDiff) bool {
 			continue
 		}
 		for _, f := range d.Findings {
-			if f.Significance >= semdiff.Normal {
+			if f.Significance >= semdiff.High || commentKind(f.Kind) {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func commentKind(kind string) bool {
+	for _, prefix := range []string{"matrix.", "graph.", "estimate."} {
+		if strings.HasPrefix(kind, prefix) {
+			return true
 		}
 	}
 	return false

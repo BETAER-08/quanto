@@ -127,8 +127,13 @@ func TestPublishable(t *testing.T) {
 		{"empty", nil, false},
 		{"nil entry", []*semdiff.FileDiff{nil}, false},
 		{"low only", []*semdiff.FileDiff{low}, false},
-		{"normal", []*semdiff.FileDiff{low, normal}, true},
-		{"high", []*semdiff.FileDiff{specDiff()}, true},
+		{"normal job added", []*semdiff.FileDiff{low, normal}, false},
+		{"normal trigger", []*semdiff.FileDiff{{Findings: []semdiff.Finding{{Kind: "trigger.added", Significance: semdiff.Normal}, {Kind: "action.ref_changed", Significance: semdiff.Normal}}}}, false},
+		{"normal matrix", []*semdiff.FileDiff{{Findings: []semdiff.Finding{{Kind: "matrix.dynamic", Significance: semdiff.Normal}}}}, true},
+		{"normal graph", []*semdiff.FileDiff{normal, {Findings: []semdiff.Finding{{Kind: "graph.depth_changed", Significance: semdiff.Normal}}}}, true},
+		{"normal estimate", []*semdiff.FileDiff{{Findings: []semdiff.Finding{{Kind: "estimate.changed", Significance: semdiff.Normal}}}}, true},
+		{"high", []*semdiff.FileDiff{{Findings: []semdiff.Finding{{Kind: "permissions.broadened", Significance: semdiff.High}}}}, true},
+		{"spec", []*semdiff.FileDiff{specDiff()}, true},
 	}
 	for _, tt := range tests {
 		if got := Publishable(tt.diffs); got != tt.want {

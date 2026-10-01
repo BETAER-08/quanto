@@ -27,7 +27,9 @@ Execution changes in 1 workflow file.
 <sub>Static analysis of workflow files only. No code from this pull request was executed.</sub>
 ```
 
-The pull request comment additionally names the analyzed head commit in the footer. Findings of low significance (for example a narrowed permission or an added first-party action) appear in the Check Run and its annotations but not in the comment. When a later push leaves no findings of normal or high significance, an existing comment is updated to say that there are no workflow execution changes as of that commit; no new comment is created in that case.
+The pull request comment additionally names the analyzed head commit in the footer. Every analysis creates or updates the Check Run, which lists all findings with annotations. A comment is posted only when the pull request has at least one finding of high significance, or at least one finding about the matrix (`matrix.*`), the `needs` graph (`graph.*`), or the runner-minute estimate (`estimate.*`). Other findings of normal significance (for example an added trigger, a changed filter, or a bumped action ref) appear only in the Check Run. When a comment is posted it contains all findings of normal and high significance; findings of low significance (for example a narrowed permission or an added first-party action) never appear in the comment. When a later push no longer meets the comment threshold, an existing comment is updated to say that there are no workflow execution changes as of that commit, and the Check Run still lists any remaining findings; no new comment is created in that case.
+
+When the same finding text appears in two or more workflow files, the comment and the Check Run summary show it once under `Across N workflow files` with the number of files; annotations and the JSON report keep one entry per file.
 
 ## Permissions
 

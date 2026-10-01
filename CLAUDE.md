@@ -854,7 +854,7 @@ func NoChanges(headSHA string) string
 func Plain(s string) string
 ```
 
-- `Publishable`: Normal 이상 Finding이 하나라도 있으면 true다.
+- `Publishable`: High Finding이 하나라도 있거나, Kind가 `matrix.`, `graph.`, `estimate.`로 시작하는 Finding이 하나라도 있을 때만 true다. 그 외 Normal Finding만 있는 PR은 코멘트를 만들지 않고 Check Run에만 나온다. 코멘트를 게시할 때 본문(`Markdown`)에는 기존 규칙대로 Normal 이상 Finding이 모두 들어간다.
 - `Message`: 9.4 표의 문구를 만든다.
 - **사용자 유래 문자열 출력 규칙(마크다운 주입 방지).** YAML 값·키, 잡 ID, 잡 이름, 액션 참조, 파일 경로, cron, 브랜치 필터, runs-on, concurrency, timeout, 에러 메시지, 커밋 SHA 등 PR 내용이나 외부 입력에서 온 문자열은 `core/report`의 비공개 함수 `inline` 하나로만 출력한다. 다른 경로로 사용자 문자열을 출력하는 곳이 없어야 한다. 예외는 펜스 없는 터미널 평문 출력뿐이며, 이 경우는 공개 함수 `Plain`(아래 1~2단계)으로만 출력한다. `inline`은 다음을 순서대로 적용한다.
   1. CR, LF, 탭과 기타 제어 문자(`unicode.IsControl`: C0, DEL, C1. ANSI ESC 포함)를 각각 공백 하나로 바꾼다.
