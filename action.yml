@@ -1,4 +1,4 @@
-name: quanto
+name: quanto workflow diff
 description: Reports how a pull request changes the execution of GitHub Actions workflows.
 author: BETAER-08
 branding:

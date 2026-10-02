@@ -1445,7 +1445,8 @@ func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta, details report.Det
 
 ### 23.4 `action.yml` (저장소 루트, composite)
 
-- 메타데이터: `name: quanto`, `branding: {icon: activity, color: purple}`(Marketplace 표시용).
+- 메타데이터: `name: quanto workflow diff`, `branding: {icon: activity, color: purple}`(Marketplace 표시용).
+- **표시 이름과 제품명.** Marketplace 표시 이름은 `action.yml`의 `name`("quanto workflow diff")이다. 제품명, CLI(`quanto`), 바이너리 이름, 저장소 이름, Go 모듈 경로, PR 코멘트 제목(`## quanto`), 코멘트 마커, `uses` 예시(`BETAER-08/quanto@v1`)는 quanto로 유지한다. 근거: Marketplace는 기존 GitHub 사용자·조직명 또는 기존 Action과 같은 `name`을 거부한다.
 - 입력: `github-token`(기본 `${{ github.token }}`), `comment`(기본 `true`), `estimate`(기본 `true`), `max-files`(기본 `50`), `version`(기본 빈 문자열 = action ref와 같은 태그).
 - 설치 단계(bash): `RUNNER_OS`/`RUNNER_ARCH`를 `quanto-linux-amd64`, `quanto-linux-arm64`, `quanto-darwin-amd64`, `quanto-darwin-arm64`, `quanto-windows-amd64.exe` 중 하나로 매핑한다. 그 외 조합은 `::error` 후 종료 코드 1.
   - 저장소와 ref: `github.action_repository`, `version` 입력 또는 `github.action_ref`. 비어 있으면 `GITHUB_ACTION_PATH`의 `_actions/<owner>/<repo>/<ref>`에서 도출한다.
