@@ -6,5 +6,8 @@ on:
 jobs:
   sample:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [18, 20, 22]
     steps:
       - run: true
