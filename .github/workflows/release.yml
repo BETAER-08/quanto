@@ -3,7 +3,7 @@ name: release
 on:
   push:
     tags:
-      - 'v*'
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
 
 permissions:
   contents: read
@@ -11,12 +11,23 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    outputs:
+      major: ${{ steps.classify.outputs.major }}
     permissions:
       contents: write
       id-token: write
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: classify
+        id: classify
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG" =~ ^(v[0-9]+)\.[0-9]+\.[0-9]+$ ]]; then
+            echo "major=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -51,4 +62,36 @@ jobs:
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* --title "$TAG" --verify-tag --generate-notes
+          fi
+
+  move-major:
+    needs: release
+    if: needs.release.outputs.major != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: move major tag
+        env:
+          MAJOR: ${{ needs.release.outputs.major }}
+        run: |
+          set -euo pipefail
+          git tag -f "$MAJOR" "$GITHUB_SHA"
+          git push -f origin "refs/tags/${MAJOR}"
+      - name: update major release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          MAJOR: ${{ needs.release.outputs.major }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$TAG" --dir dist --pattern 'quanto-*' --pattern checksums.txt
+          (cd dist && sha256sum -c checksums.txt)
+          if gh release view "$MAJOR" >/dev/null 2>&1; then
+            gh release upload "$MAJOR" dist/* --clobber
+          else
+            gh release create "$MAJOR" dist/* --title "$MAJOR" --verify-tag --latest=false --notes "Moving major tag; currently points to ${TAG}."
           fi

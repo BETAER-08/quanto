@@ -155,7 +155,7 @@ Subscribed events: `pull_request` (opened, synchronize, reopened) and `workflow_
 - Reusable workflows are not opened. A job that calls a reusable workflow counts as one job per matrix instance, and changes inside the called workflow are not reported.
 - Composite actions and the contents of referenced actions are not inspected. Only the `uses:` reference and its ref are compared.
 - A tag and a branch cannot be told apart statically; every ref that is not a 40-character commit SHA is treated as mutable.
-- Runner-minute estimates assume that future runs take as long as the average of the last 30 successful runs of each job, multiplied by the number of matrix instances. An estimate is shown only when every job before and after the change has at least 5 recorded runs and no matrix is dynamic. Queue time, retries, and skipped jobs are not modeled, and minutes are not converted to cost.
+- Runner-minute estimates follow GitHub's billing unit: each job's average duration over its last 30 successful runs is rounded up to whole minutes (a 0-second average counts as 0), multiplied by the number of matrix instances, and summed without further rounding. They assume future runs take as long as that average. An estimate is shown only when every job before and after the change has at least 5 recorded runs and no matrix is dynamic. Queue time, retries, and skipped jobs are not modeled, and minutes are not converted to cost.
 - Job history is matched by job name. Jobs whose `name` contains an expression, and jobs whose names collide once the ` (...)` matrix suffix is removed, do not match their history, so the estimate is omitted.
 - Runs of reusable workflows (job names containing ` / `) are not recorded.
 - At most `QUANTO_MAX_WORKFLOW_FILES` (default 50) workflow files are analyzed per pull request; files larger than 256 KiB are reported as unanalyzable, and `quanto inspect` and `quanto diff` refuse them with exit code 1.
@@ -165,6 +165,7 @@ Subscribed events: `pull_request` (opened, synchronize, reopened) and `workflow_
 - The action does not re-read the pull request head before commenting and keeps no comment cache; it finds its comment by the marker and the `github-actions[bot]` author. A comment written by another token (for example a personal access token passed as `github-token`) is not found and a new one is created.
 - When an existing comment is updated because no change meets the comment threshold, its text refers to the quanto check run; with the action the remaining findings are in the Job Summary of the run.
 - The action's estimate looks at no more than 10 workflow files and the last 10 successful runs of each, so it is omitted when fewer than 5 successful runs of every job are found.
+- `@v1` follows the latest `v1.x.y` release: the release workflow moves the `v1` tag and updates the `v1` release assets after each stable release; prerelease tags such as `v1.1.0-rc.1` do not move it.
 - The release to download is derived from the action ref. When the action is pinned by commit SHA or referenced by a branch, set the `version` input to a release tag.
 
 ## License

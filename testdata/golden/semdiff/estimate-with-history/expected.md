@@ -10,7 +10,7 @@ Execution changes in 1 workflow file.
 | Jobs per run | 3 | 5 |
 | Longest `needs` chain | 2 | 2 |
 | Max concurrent jobs | 2 | 4 |
-| Est. runner minutes per run | 25 | 45 |
+| Est. billable runner minutes per run | 25 | 45 |
 
 - Job `test` matrix: 2 → 4 jobs
 - Estimated runner minutes per run: 25 → 45 (10 historical runs per job)

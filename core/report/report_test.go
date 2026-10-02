@@ -23,7 +23,7 @@ const specExample = "<!-- quanto:summary -->\n" +
 	"| Jobs per run | 7 | 25 |\n" +
 	"| Longest `needs` chain | 3 | 3 |\n" +
 	"| Max concurrent jobs | 2 | 4 |\n" +
-	"| Est. runner minutes per run | 43 | 172 |\n" +
+	"| Est. billable runner minutes per run | 43 | 172 |\n" +
 	"\n" +
 	"- Job `test` matrix: 6 → 24 jobs\n" +
 	"- `contents` permission (workflow): `read` → `write`\n" +
@@ -382,7 +382,7 @@ func TestText(t *testing.T) {
 	want := "`.github/workflows/ci.yml` (modified)\n" +
 		"  Jobs per run: 7 → 25\n" +
 		"  Max concurrent jobs: 2 → 4\n" +
-		"  Est. runner minutes per run: 43 → 172\n" +
+		"  Est. billable runner minutes per run: 43 → 172\n" +
 		"  - [high] Job `test` matrix: 6 → 24 jobs\n" +
 		"  - [high] `contents` permission (workflow): `read` → `write`\n" +
 		"  - [high] New third-party action: `peter-evans/create-pull-request@v6` (mutable ref)\n" +

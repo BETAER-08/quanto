@@ -1,6 +1,9 @@
 name: quanto
 description: Reports how a pull request changes the execution of GitHub Actions workflows.
 author: BETAER-08
+branding:
+  icon: activity
+  color: purple
 inputs:
   github-token:
     description: Token used to read the pull request and run history and to write the summary comment.

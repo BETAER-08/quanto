@@ -1,6 +1,6 @@
 `.github/workflows/ci.yml` (modified)
   Jobs per run: 3 → 5
   Max concurrent jobs: 2 → 4
-  Est. runner minutes per run: 25 → 45
+  Est. billable runner minutes per run: 25 → 45
   - [high] Job `test` matrix: 2 → 4 jobs
   - [high] Estimated runner minutes per run: 25 → 45 (10 historical runs per job)

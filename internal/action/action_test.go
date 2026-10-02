@@ -336,7 +336,7 @@ func TestEstimateRecordsCallsAndFindings(t *testing.T) {
 		t.Fatalf("code = %d", code)
 	}
 	summary := e.readSummary(t)
-	for _, want := range []string{"| Est. runner minutes per run | 13 | 49 |", "Runner-minute estimate: 6 GitHub API calls for 1 workflow file."} {
+	for _, want := range []string{"| Est. billable runner minutes per run | 13 | 49 |", "Runner-minute estimate: 6 GitHub API calls for 1 workflow file."} {
 		if !strings.Contains(summary, want) {
 			t.Errorf("summary missing %q\n%s", want, summary)
 		}

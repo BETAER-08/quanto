@@ -5,6 +5,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/BETAER-08/quanto/core/graph"
 	"github.com/BETAER-08/quanto/core/matrix"
@@ -140,7 +141,7 @@ func (s *side) estimate(opts Options) {
 		if !ok || n < opts.MinSamples {
 			return
 		}
-		total += float64(info.count) * avg.Minutes()
+		total += float64(info.count) * billableMinutes(avg)
 		if minSamples < 0 || n < minSamples {
 			minSamples = n
 		}
@@ -149,6 +150,13 @@ func (s *side) estimate(opts Options) {
 	s.minutes = total
 	s.samples = minSamples
 	s.metrics.RunnerMinutes = formatMinutes(total)
+}
+
+func billableMinutes(avg time.Duration) float64 {
+	if avg <= 0 {
+		return 0
+	}
+	return math.Ceil(avg.Seconds() / 60)
 }
 
 func formatMinutes(m float64) string {

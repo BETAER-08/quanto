@@ -100,7 +100,7 @@ func metricRows(d *semdiff.FileDiff) []metricRow {
 		{"Max concurrent jobs", strCell(b, b.Width), strCell(a, a.Width)},
 	}
 	if b.RunnerMinutes != "" && a.RunnerMinutes != "" {
-		rows = append(rows, metricRow{"Est. runner minutes per run", number(b.RunnerMinutes), number(a.RunnerMinutes)})
+		rows = append(rows, metricRow{"Est. billable runner minutes per run", number(b.RunnerMinutes), number(a.RunnerMinutes)})
 	}
 	return rows
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -447,6 +448,38 @@ func TestEstimateRules(t *testing.T) {
 	same := Compare(Input{Path: "old.yml", Before: w, After: w}, Options{Durations: src})
 	if same.Estimate == nil || len(same.Findings) != 0 {
 		t.Errorf("unchanged estimate = %+v %+v", same.Estimate, same.Findings)
+	}
+}
+
+func matrixWorkflow(t *testing.T, n int) *model.Workflow {
+	t.Helper()
+	vals := make([]string, n)
+	for i := range vals {
+		vals[i] = strconv.Itoa(i)
+	}
+	return mustParse(t, "on: push\njobs:\n  a: {runs-on: x, strategy: {matrix: {v: ["+strings.Join(vals, ", ")+"]}}, steps: [{run: a}]}\n")
+}
+
+func TestBillableMinutes(t *testing.T) {
+	cases := []struct {
+		name          string
+		avg           time.Duration
+		before, after int
+		wantB, wantA  string
+	}{
+		{"ten seconds two to three", 10 * time.Second, 2, 3, "2", "3"},
+		{"sixty one seconds one to one", 61 * time.Second, 1, 1, "2", "2"},
+		{"zero seconds", 0, 2, 3, "0", "0"},
+		{"exactly sixty seconds", 60 * time.Second, 1, 2, "1", "2"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			src := mapDurations{"ci.yml|a": {avg: tc.avg, n: 5}}
+			d := Compare(Input{Path: "ci.yml", Before: matrixWorkflow(t, tc.before), After: matrixWorkflow(t, tc.after)}, Options{Durations: src})
+			if d.Before.RunnerMinutes != tc.wantB || d.After.RunnerMinutes != tc.wantA {
+				t.Errorf("runner minutes = %q → %q, want %q → %q", d.Before.RunnerMinutes, d.After.RunnerMinutes, tc.wantB, tc.wantA)
+			}
+		})
 	}
 }
 

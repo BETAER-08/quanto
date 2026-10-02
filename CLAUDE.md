@@ -695,7 +695,10 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 
 ### 9.3 추정
 
-- 각 잡의 인스턴스 수 × `JobAverage(path, JobKey(job))`의 합이다.
+- **과금 분 기준.** GitHub Actions는 잡마다 사용 시간을 분 단위로 올림해 과금한다. 추정도 이 단위를 따른다.
+- 잡별 과금 분은 `JobAverage(path, JobKey(job))`의 평균 실행 시간 `s`(초)에 대해 `ceil(s / 60)`이다. `s ≤ 0`(skipped 등으로 평균 0초)이면 0분이다.
+- 추정값은 `Σ(잡의 인스턴스 수 × 잡별 과금 분)`이다. 올림은 잡 단위에서만 하고, 합산 후에는 반올림하지 않는다. 예: 평균 10초 잡의 조합 수 2 → 3은 2 → 3분, 평균 61초 잡 1 → 1은 2 → 2분.
+- report의 Metrics 행 라벨은 `Est. billable runner minutes per run`이다.
 - 전후 **모든** 잡이 `MinSamples` 이상의 샘플을 갖고, 동적 매트릭스가 없을 때만 계산한다. 하나라도 부족하면 `Estimate = nil`이다. 부분 추정은 하지 않는다.
 - 달러로 환산하지 않는다. 분 단위만 쓴다.
 
@@ -899,7 +902,7 @@ Execution changes in 1 workflow file.
 | Jobs per run | 7 | 25 |
 | Longest `needs` chain | 3 | 3 |
 | Max concurrent jobs | 2 | 4 |
-| Est. runner minutes per run | 43 | 172 |
+| Est. billable runner minutes per run | 43 | 172 |
 
 - Job `test` matrix: 6 → 24 jobs
 - `contents` permission (workflow): `read` → `write`
@@ -1275,6 +1278,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 - `test` 잡: `ubuntu-latest`, checkout, `setup-go`(`go-version-file: go.mod`), `test -z "$(gofmt -l .)"`, `go vet ./...`, `go run scripts/check-comments.go`, `go test -race ./...`, `scripts/fetch-corpus.sh`, `go test -run Corpus ./...`, 퍼즈 대상마다 `go test -run '^$' -fuzz <대상> -fuzztime 20s -fuzzminimizetime 5s <패키지>`. 최소화 기본값(60초)이 퍼즈 시간을 잡아먹지 않게 하기 위해서다.
 - `integration` 잡: `services.postgres`(`postgres:16`, 헬스체크 포함), `QUANTO_TEST_DATABASE_URL` 설정 후 `go test -race ./internal/...`.
 - 액션 참조는 `actions/checkout@v5`, `actions/setup-go@v6`를 쓴다(Node 24 런타임).
+- 릴리스 워크플로(`release.yml`)는 23.5를 따른다. `vMAJOR.MINOR.PATCH` 정식 태그에서만 `move-major` 잡이 `vMAJOR` 태그와 릴리스를 갱신하고, `vMAJOR` 태그 push로는 release가 실행되지 않는다.
 
 ---
 
@@ -1436,6 +1440,7 @@ func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta) (body string, publ
 
 ### 23.4 `action.yml` (저장소 루트, composite)
 
+- 메타데이터: `name: quanto`, `branding: {icon: activity, color: purple}`(Marketplace 표시용).
 - 입력: `github-token`(기본 `${{ github.token }}`), `comment`(기본 `true`), `estimate`(기본 `true`), `max-files`(기본 `50`), `version`(기본 빈 문자열 = action ref와 같은 태그).
 - 설치 단계(bash): `RUNNER_OS`/`RUNNER_ARCH`를 `quanto-linux-amd64`, `quanto-linux-arm64`, `quanto-darwin-amd64`, `quanto-darwin-arm64`, `quanto-windows-amd64.exe` 중 하나로 매핑한다. 그 외 조합은 `::error` 후 종료 코드 1.
   - 저장소와 ref: `github.action_repository`, `version` 입력 또는 `github.action_ref`. 비어 있으면 `GITHUB_ACTION_PATH`의 `_actions/<owner>/<repo>/<ref>`에서 도출한다.
@@ -1445,7 +1450,10 @@ func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta) (body string, publ
 
 ### 23.5 릴리스와 도그푸딩
 
-- `.github/workflows/release.yml`: `v*` 태그 푸시에서 테스트 후 23.4의 5개 조합을 `CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=<tag>"`로 만들고, `sha256sum` 형식의 `checksums.txt`를 만든 뒤 `actions/attest-build-provenance`로 바이너리에 빌드 출처 증명을 붙이고 `gh`로 Release를 만든다. 같은 태그의 Release가 이미 있으면(이동한 `v1` 같은 메이저 태그) 자산을 `--clobber`로 교체한다. 액션은 커밋 SHA로 고정한다. 워크플로 수준 `permissions: contents: read`, 잡 수준 `contents: write`, `id-token: write`, `attestations: write`. 태그 생성과 이동은 사람이 한다(0절).
+- `.github/workflows/release.yml`: `v*` 태그 푸시에서 테스트 후 23.4의 5개 조합을 `CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=<tag>"`로 만들고, `sha256sum` 형식의 `checksums.txt`를 만든 뒤 `actions/attest-build-provenance`로 바이너리에 빌드 출처 증명을 붙이고 `gh`로 Release를 만든다. 같은 태그의 Release가 이미 있으면 자산을 `--clobber`로 교체한다. 액션은 커밋 SHA로 고정한다. 워크플로 수준 `permissions: contents: read`, `release` 잡 수준 `contents: write`, `id-token: write`, `attestations: write`.
+  - **트리거 필터.** `on.push.tags`는 `v[0-9]+.[0-9]+.[0-9]+*`다. `vMAJOR` 태그(`v1`) push는 필터에 걸리지 않으므로 메이저 태그 이동이 release 워크플로를 다시 트리거해 중복 빌드하지 않는다(`GITHUB_TOKEN` push가 워크플로를 트리거하지 않는 것과 별개의 이중 방어).
+  - **메이저 태그 자동 이동.** `release` 잡의 `classify` 단계가 태그를 `^(v[0-9]+)\.[0-9]+\.[0-9]+$`로 판정해 일치할 때만 `major` 출력을 낸다. `-rc.1` 같은 접미사가 붙은 prerelease 태그는 출력이 비어 이동하지 않는다. `move-major` 잡은 `needs: release`, `if: needs.release.outputs.major != ''`이고 권한은 `contents: write` 하나다. `git tag -f vMAJOR $GITHUB_SHA` 후 `git push -f origin refs/tags/vMAJOR`로 태그를 옮기고, `gh release download`로 방금 만든 릴리스의 바이너리와 `checksums.txt`를 받아 `sha256sum -c`로 검증한 뒤 `vMAJOR` 릴리스에 `--clobber`로 올린다. `vMAJOR` 릴리스가 없으면 `--latest=false`로 만든다.
+  - `vX.Y.Z` 태그 생성은 사람이 한다. 에이전트는 태그를 만들거나 옮기지 않는다(0절). 메이저 태그 이동은 이 워크플로만 한다.
 - `.github/workflows/quanto.yml`: `pull_request`(`paths: ['.github/workflows/**']`), `permissions: contents: read, pull-requests: write, actions: read`, checkout → setup-go(`go-version-file: go.mod`) → `uses: ./`.
 
 ### 23.6 테스트
