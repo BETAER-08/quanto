@@ -101,7 +101,7 @@ func TestMessageAllKinds(t *testing.T) {
 		{semdiff.Finding{Kind: "action.third_party_added", Subject: "a/b", After: "0123456789012345678901234567890123456789"}, "New third-party action: `a/b@0123456789012345678901234567890123456789`"},
 		{semdiff.Finding{Kind: "action.ref_changed", Subject: "actions/checkout", Before: "v4", After: "v5"}, "`actions/checkout`: `v4` → `v5`"},
 		{semdiff.Finding{Kind: "action.pin_removed", Subject: "a/b", Before: "0123456789012345678901234567890123456789", After: "v1"}, "`a/b` changed from commit SHA to mutable ref `v1`"},
-		{semdiff.Finding{Kind: "estimate.changed", Before: "43", After: "172", Detail: "12"}, "Estimated runner minutes per run: 43 → 172 (12 historical runs per job)"},
+		{semdiff.Finding{Kind: "estimate.changed", Before: "43", After: "172", Detail: "12"}, "Est. billable runner minutes per run: 43 → 172 (12 historical runs per job)"},
 	}
 	covered := make(map[string]bool)
 	for _, tt := range tests {
@@ -568,5 +568,51 @@ func TestPublishableReadOnlyBroadening(t *testing.T) {
 	}
 	if !Publishable([]*semdiff.FileDiff{writeDiff}) {
 		t.Error("write broadening is not publishable")
+	}
+}
+
+func TestEstimateLabelAcrossRenderers(t *testing.T) {
+	if EstimateLabel != "Est. billable runner minutes per run" {
+		t.Fatalf("EstimateLabel = %q", EstimateLabel)
+	}
+	d := specDiff()
+	d.Findings = append(d.Findings, semdiff.Finding{Kind: "estimate.changed", Significance: semdiff.High, Before: "43", After: "172", Detail: "12", Pos: pos(3, 1, 3, 4)})
+	diffs := []*semdiff.FileDiff{d}
+	meta := Meta{HeadSHA: "abc1234567890"}
+	_, summary := CheckSummary(diffs, meta)
+	var annotations strings.Builder
+	for _, a := range Annotations(diffs) {
+		annotations.WriteString(a.Message + "\n")
+	}
+	outputs := []struct {
+		name    string
+		got     string
+		row     string
+		finding string
+	}{
+		{"markdown", Markdown(diffs, meta), "| " + EstimateLabel + " | 43 | 172 |", "- " + EstimateLabel + ": 43 → 172 (12 historical runs per job)"},
+		{"check summary", summary, "| " + EstimateLabel + " | 43 | 172 |", "- " + EstimateLabel + ": 43 → 172 (12 historical runs per job)"},
+		{"text", Text(diffs), "  " + EstimateLabel + ": 43 → 172", EstimateLabel + ": 43 → 172 (12 historical runs per job)"},
+		{"annotations", annotations.String(), "", EstimateLabel + ": 43 → 172 (12 historical runs per job)"},
+	}
+	for _, o := range outputs {
+		if o.row != "" && !strings.Contains(o.got, o.row) {
+			t.Errorf("%s: missing metric row %q\n%s", o.name, o.row, o.got)
+		}
+		if !strings.Contains(o.got, o.finding) {
+			t.Errorf("%s: missing finding %q\n%s", o.name, o.finding, o.got)
+		}
+		for _, stale := range []string{"Estimated runner minutes", "Est. runner minutes"} {
+			if strings.Contains(o.got, stale) {
+				t.Errorf("%s: contains stale label %q", o.name, stale)
+			}
+		}
+	}
+	js, err := JSON(diffs, meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(js), "Estimated runner minutes") {
+		t.Errorf("json contains stale label")
 	}
 }

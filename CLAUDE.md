@@ -742,7 +742,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 | `action.third_party_added` | High | New third-party action: `{subject}@{after}`{detail} |
 | `action.ref_changed` | Normal | `{subject}`: `{before}` → `{after}` |
 | `action.pin_removed` | High | `{subject}` changed from commit SHA to mutable ref `{after}` |
-| `estimate.changed` | 변화율 ≥ 50%면 High, 아니면 Normal | Estimated runner minutes per run: {before} → {after} ({detail} historical runs per job) |
+| `estimate.changed` | 변화율 ≥ 50%면 High, 아니면 Normal | Est. billable runner minutes per run: {before} → {after} ({detail} historical runs per job) |
 
 세부 규칙:
 

@@ -65,7 +65,7 @@ Execution changes in 2 workflow files.
 - New third-party action: `@@org/admins` (mutable ref)
 - `![](https://evil.example/p.png)`: `@org/admins` → ```` ``` ````
 - `@org/admins` changed from commit SHA to mutable ref `<details>`
-- Estimated runner minutes per run: `<details>` → `<!-- quanto:summary -->` (`` `lead and trail` `` historical runs per job)
+- Est. billable runner minutes per run: `<details>` → `<!-- quanto:summary -->` (`` `lead and trail` `` historical runs per job)
 - `<details>` permission (job `x  ## Approved`): `read` → `write`
 - `unknown.kind ## Approved` `@org/admins`
 

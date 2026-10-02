@@ -28,6 +28,8 @@ const CommentMarker = "<!-- quanto:summary -->"
 
 const MaxBodyRunes = 60000
 
+const EstimateLabel = "Est. billable runner minutes per run"
+
 func Publishable(diffs []*semdiff.FileDiff) bool {
 	for _, d := range diffs {
 		if d == nil {
@@ -100,7 +102,7 @@ func metricRows(d *semdiff.FileDiff) []metricRow {
 		{"Max concurrent jobs", strCell(b, b.Width), strCell(a, a.Width)},
 	}
 	if b.RunnerMinutes != "" && a.RunnerMinutes != "" {
-		rows = append(rows, metricRow{"Est. billable runner minutes per run", number(b.RunnerMinutes), number(a.RunnerMinutes)})
+		rows = append(rows, metricRow{EstimateLabel, number(b.RunnerMinutes), number(a.RunnerMinutes)})
 	}
 	return rows
 }

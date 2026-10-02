@@ -12,7 +12,7 @@ Execution changes in 1 workflow file.
 | Est. billable runner minutes per run | 13 | 49 |
 
 - Job `test` matrix: 6 → 24 jobs
-- Estimated runner minutes per run: 13 → 49 (5 historical runs per job)
+- Est. billable runner minutes per run: 13 → 49 (5 historical runs per job)
 
 ---
 <sub>Static analysis of workflow files only. No code from this pull request was executed. Commit `1111111`.</sub>

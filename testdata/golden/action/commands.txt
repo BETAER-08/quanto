@@ -1,2 +1,2 @@
 ::notice file=.github/workflows/ci.yml,line=13,endLine=15,title=matrix.count_changed::Job `test` matrix: 6 → 24 jobs
-::notice file=.github/workflows/ci.yml,line=3,endLine=3,col=1,endColumn=4,title=estimate.changed::Estimated runner minutes per run: 13 → 49 (5 historical runs per job)
+::notice file=.github/workflows/ci.yml,line=3,endLine=3,col=1,endColumn=4,title=estimate.changed::Est. billable runner minutes per run: 13 → 49 (5 historical runs per job)

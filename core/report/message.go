@@ -155,7 +155,7 @@ func Message(f semdiff.Finding) string {
 	case "action.pin_removed":
 		return inline(s) + " changed from commit SHA to mutable ref " + inline(a)
 	case "estimate.changed":
-		return "Estimated runner minutes per run: " + number(b) + " → " + number(a) + " (" + number(d) + " historical runs per job)"
+		return EstimateLabel + ": " + number(b) + " → " + number(a) + " (" + number(d) + " historical runs per job)"
 	}
 	parts := []string{inline(f.Kind)}
 	for _, v := range []string{s, b, a, d} {

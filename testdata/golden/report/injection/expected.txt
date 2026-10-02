@@ -49,6 +49,6 @@
   - [normal] New third-party action: `@@org/admins` (mutable ref)
   - [normal] `![](https://evil.example/p.png)`: `@org/admins` → ```` ``` ````
   - [normal] `@org/admins` changed from commit SHA to mutable ref `<details>`
-  - [normal] Estimated runner minutes per run: `<details>` → `<!-- quanto:summary -->` (`` `lead and trail` `` historical runs per job)
+  - [normal] Est. billable runner minutes per run: `<details>` → `<!-- quanto:summary -->` (`` `lead and trail` `` historical runs per job)
   - [high] `<details>` permission (job `x  ## Approved`): `read` → `write`
   - [normal] `unknown.kind ## Approved` `@org/admins`

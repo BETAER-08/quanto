@@ -447,7 +447,7 @@
     "end_column": 5,
     "level": "notice",
     "title": "estimate.changed",
-    "message": "Estimated runner minutes per run: `\u003cdetails\u003e` → `\u003c!-- quanto:summary --\u003e` (`` `lead and trail` `` historical runs per job)"
+    "message": "Est. billable runner minutes per run: `\u003cdetails\u003e` → `\u003c!-- quanto:summary --\u003e` (`` `lead and trail` `` historical runs per job)"
   },
   {
     "path": ".github/workflows/x`y\u003cdetails\u003e@org/admins.yml",
