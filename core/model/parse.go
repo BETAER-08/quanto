@@ -41,7 +41,10 @@ func Parse(doc *source.Document) (*Workflow, []Diagnostic, error) {
 	w.Permissions = p.permissions(root.Field("permissions"))
 	w.Concurrency = concurrency(root.Field("concurrency"))
 	w.EnvKeys = sortedKeys(root.Field("env"))
-	w.SecretRefs = secretRefs(root)
+	w.SecretRefs, w.SecretRefPos = secretRefs(root)
+	if fields := root.Fields(); len(fields) > 0 {
+		w.FirstKeyPos = fields[0].Key.Pos()
+	}
 	jobs := root.Field("jobs")
 	w.JobsPos = root.FieldKey("jobs").Pos()
 	if jobs.Kind() != source.KindMapping || jobs.Len() == 0 {
@@ -344,8 +347,8 @@ func (p *parser) step(jobID string, index int, n *source.Node) *Step {
 	return s
 }
 
-func secretRefs(root *source.Node) []string {
-	seen := make(map[string]bool)
+func secretRefs(root *source.Node) ([]string, map[string]source.Position) {
+	seen := make(map[string]source.Position)
 	root.Walk(func(n *source.Node) bool {
 		if n.Kind() != source.KindScalar {
 			return true
@@ -366,17 +369,20 @@ func secretRefs(root *source.Node) []string {
 			if name == "*" || name == "github_token" {
 				continue
 			}
-			seen[strings.ToUpper(name)] = true
+			upper := strings.ToUpper(name)
+			if _, ok := seen[upper]; !ok {
+				seen[upper] = n.Pos()
+			}
 		}
 		return true
 	})
 	if len(seen) == 0 {
-		return nil
+		return nil, nil
 	}
 	out := make([]string, 0, len(seen))
 	for name := range seen {
 		out = append(out, name)
 	}
 	sort.Strings(out)
-	return out
+	return out, seen
 }
