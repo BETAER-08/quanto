@@ -262,15 +262,19 @@ func TestCommentBody(t *testing.T) {
 	high := []*semdiff.FileDiff{{Path: ciPath, Findings: []semdiff.Finding{{Kind: "permissions.write_all", Significance: semdiff.High, Subject: "workflow"}}}}
 	normal := []*semdiff.FileDiff{{Path: ciPath, Findings: []semdiff.Finding{{Kind: "trigger.added", Significance: semdiff.Normal, Subject: "push"}}}}
 	none := []*semdiff.FileDiff{{Path: ciPath, Findings: []semdiff.Finding{}}}
-	body, ok := CommentBody(high, meta)
+	body, ok := CommentBody(high, meta, report.DetailsCheckRun)
 	if !ok || body != report.Markdown(high, meta) {
 		t.Errorf("high = %v %q", ok, body)
 	}
-	body, ok = CommentBody(normal, meta)
-	if ok || body != report.BelowThreshold(headSHA) {
-		t.Errorf("normal = %v %q", ok, body)
+	body, ok = CommentBody(normal, meta, report.DetailsCheckRun)
+	if ok || body != report.BelowThreshold(headSHA, report.DetailsCheckRun) {
+		t.Errorf("normal check run = %v %q", ok, body)
 	}
-	body, ok = CommentBody(none, meta)
+	body, ok = CommentBody(normal, meta, report.DetailsJobSummary)
+	if ok || body != report.BelowThreshold(headSHA, report.DetailsJobSummary) {
+		t.Errorf("normal job summary = %v %q", ok, body)
+	}
+	body, ok = CommentBody(none, meta, report.DetailsCheckRun)
 	if ok || body != report.NoChanges(headSHA) {
 		t.Errorf("none = %v %q", ok, body)
 	}

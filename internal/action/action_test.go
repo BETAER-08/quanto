@@ -571,7 +571,7 @@ func TestBelowThresholdComment(t *testing.T) {
 		want     string
 	}{
 		{"below threshold without comment", "action-major-bump", false, ""},
-		{"below threshold with comment", "action-major-bump", true, report.BelowThreshold(headSHA)},
+		{"below threshold with comment", "action-major-bump", true, report.BelowThreshold(headSHA, report.DetailsJobSummary)},
 		{"no changes with comment", "identical", true, report.NoChanges(headSHA)},
 		{"no changes without comment", "identical", false, ""},
 	}
@@ -601,6 +601,9 @@ func TestBelowThresholdComment(t *testing.T) {
 			}
 			if len(patches) != 1 || decodeBody(t, patches[0].Body) != tt.want {
 				t.Errorf("patches = %+v", patches)
+			}
+			if tt.fixture == "action-major-bump" {
+				compareGolden(t, "comment-below-threshold.md", []byte(decodeBody(t, patches[0].Body)))
 			}
 		})
 	}

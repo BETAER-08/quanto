@@ -142,3 +142,14 @@ func TestGolden(t *testing.T) {
 		})
 	}
 }
+
+func TestBelowThresholdGolden(t *testing.T) {
+	dir := filepath.Join("..", "..", "testdata", "golden", "report", "below-threshold")
+	if *update {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+	}
+	checkGolden(t, filepath.Join(dir, "check-run.md"), []byte(BelowThreshold(goldenSHA, DetailsCheckRun)))
+	checkGolden(t, filepath.Join(dir, "job-summary.md"), []byte(BelowThreshold(goldenSHA, DetailsJobSummary)))
+}

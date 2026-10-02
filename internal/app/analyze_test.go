@@ -27,10 +27,11 @@ func TestNoChangeBody(t *testing.T) {
 
 func TestBelowThresholdBody(t *testing.T) {
 	want := "<!-- quanto:summary -->\n## quanto\n\nNo changes that meet the comment threshold as of commit `1111111`. Details are in the quanto check run.\n"
-	if got := report.BelowThreshold(testHead); got != want {
+	if got := report.BelowThreshold(testHead, report.DetailsCheckRun); got != want {
 		t.Fatalf("BelowThreshold = %q", got)
 	}
-	if report.BelowThreshold(testHead) == report.NoChanges(testHead) {
+	compareGolden(t, "comment-below-threshold.md", []byte(report.BelowThreshold(testHead, report.DetailsCheckRun)))
+	if report.BelowThreshold(testHead, report.DetailsCheckRun) == report.NoChanges(testHead) {
 		t.Fatal("below-threshold body equals no-changes body")
 	}
 }
@@ -302,7 +303,7 @@ func TestAnalyzeBelowThresholdUpdatesExistingComment(t *testing.T) {
 	h.enqueue(KindAnalyzePR, analyzePayload())
 	h.runOne()
 	expectEndpoints(t, h, []string{filesEndpoint, compareEndpoint, contentsEndpoint + ciPath, contentsEndpoint + ciPath, findCheckEndpoint, checkEndpoint, prEndpoint, appEndpoint, listComments, updateComment(12)})
-	if got := h.gh.comments[0].Body; got != report.BelowThreshold(testHead) {
+	if got := h.gh.comments[0].Body; got != report.BelowThreshold(testHead, report.DetailsCheckRun) {
 		t.Fatalf("comment = %q", got)
 	}
 	checks := h.gh.find("POST", "/check-runs")

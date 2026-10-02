@@ -870,7 +870,12 @@ func Annotations(diffs []*semdiff.FileDiff) []Annotation
 func Text(diffs []*semdiff.FileDiff) string
 func JSON(diffs []*semdiff.FileDiff, meta Meta) ([]byte, error)
 func NoChanges(headSHA string) string
-func BelowThreshold(headSHA string) string
+type DetailsLocation int
+const (
+    DetailsCheckRun DetailsLocation = iota
+    DetailsJobSummary
+)
+func BelowThreshold(headSHA string, details DetailsLocation) string
 func Plain(s string) string
 ```
 
@@ -886,7 +891,7 @@ func Plain(s string) string
 - `Markdown`, `CheckSummary`, `Annotations`(message와 title), `Text`, `NoChanges`, `BelowThreshold` 전부 이 규칙을 따른다. `Text`의 파일 경로 줄도 `inline`을 거친다.
 - `Plain(s)`: `inline`의 1~2단계만 적용하고 펜스는 씌우지 않는다. `inline`은 `Plain`의 결과에 3단계를 적용하므로 두 출력의 정리 규칙은 같다. 테스트는 `ESC[31m`(색상), `ESC]0;title BEL`(창 제목), `\r` 덮어쓰기, C1 `CSI`, DEL, 80·81 rune 경계를 검증한다.
 - `NoChanges(headSHA string) string`은 15.3의 "변화 없음" 코멘트 본문을 만든다: `CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit " + inline(sha7) + ".\n"`. 분석한 모든 파일의 Finding이 Low 포함 0개일 때만 쓴다.
-- `BelowThreshold(headSHA string) string`은 15.3의 "게시 기준 미달" 코멘트 본문을 만든다: `CommentMarker + "\n## quanto\n\nNo changes that meet the comment threshold as of commit " + inline(sha7) + ". Details are in the quanto check run.\n"`. Finding이 하나 이상 있지만 `Publishable`이 false일 때 쓴다.
+- `BelowThreshold(headSHA string, details DetailsLocation) string`은 15.3의 "게시 기준 미달" 코멘트 본문을 만든다: `CommentMarker + "\n## quanto\n\nNo changes that meet the comment threshold as of commit " + inline(sha7) + ". " + <상세 위치 문장> + "\n"`. 상세 위치 문장은 호출자가 실행 환경에 맞게 고른다. `DetailsCheckRun`(App, 15.3)은 `Details are in the quanto check run.`, `DetailsJobSummary`(Action, 23.3)는 `Details are in the job summary of the quanto workflow run.`이다. 사용자 문자열을 받지 않고 고정 열거값만 받으므로 상세 위치 문장은 `inline`을 거치지 않는다. Finding이 하나 이상 있지만 `Publishable`이 false일 때 쓴다. 두 문구는 `testdata/golden/report/below-threshold/check-run.md`, `job-summary.md`, `testdata/golden/e2e/comment-below-threshold.md`, `testdata/golden/action/comment-below-threshold.md` 골든으로 고정한다.
 - `Markdown`의 형식은 다음과 같다. 파일은 경로 사전순이다. 표는 Metrics 값이 전후로 하나라도 다를 때만 넣는다. 추정 행은 양쪽 값이 있을 때만 넣는다. Low Finding은 코멘트에 넣지 않는다.
 
 ```
@@ -1219,7 +1224,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 10. 코멘트 전에 `PullRequest`를 다시 읽는다. 현재 head SHA가 페이로드의 `head_sha`와 다르면 코멘트 단계를 건너뛴다.
 11. 코멘트 대상 ID는 `pr_comments` 캐시를 먼저 보고, 없으면 `IssueComments` 중 본문이 `CommentMarker`로 시작하고 작성자 login이 `{app slug}[bot]`인 것을 찾는다(App slug는 `App()` 결과를 프로세스 수명 동안 캐시).
     - `Publishable`이면 있으면 수정, 없으면 생성하고 캐시에 기록한다.
-    - 아니면서 기존 코멘트가 있으면, 분석한 파일의 Finding이 Low 포함 0개일 때는 `report.NoChanges(head_sha)`, 하나 이상일 때는 `report.BelowThreshold(head_sha)`로 수정한다. 게시 기준 미달 변경이 남은 PR에 "변화 없음"이라고 쓰면 거짓 안심이 되기 때문이다.
+    - 아니면서 기존 코멘트가 있으면, 분석한 파일의 Finding이 Low 포함 0개일 때는 `report.NoChanges(head_sha)`, 하나 이상일 때는 `report.BelowThreshold(head_sha, report.DetailsCheckRun)`로 수정한다. 게시 기준 미달 변경이 남은 PR에 "변화 없음"이라고 쓰면 거짓 안심이 되기 때문이다.
     - 아니면서 기존 코멘트가 없으면 아무것도 하지 않는다.
 12. `SaveAnalysis`로 저장한다.
 
@@ -1403,11 +1408,11 @@ func IsWorkflowPath(p string) bool
 func Load(ctx, src Source, req Request) (*Result, error)
 func (r *Result) Compare(opts semdiff.Options) []*semdiff.FileDiff
 func HasFindings(diffs []*semdiff.FileDiff) bool
-func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta) (body string, publishable bool)
+func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta, details report.DetailsLocation) (body string, publishable bool)
 ```
 
 - `Load`는 15.3의 3~6단계를 그대로 수행한다. 워크플로 파일이 없으면 `MergeBase`를 호출하지 않고 `Inputs`가 빈 `Result`를 반환한다. GitHub 접근 실패는 에러로 반환하고, 파일 단위 파싱 실패와 `ErrFileTooLarge`는 `Input.BeforeErr`/`AfterErr`로 넘긴다.
-- `CommentBody`는 15.3의 11단계 문구 규칙이다: `Publishable`이면 `report.Markdown`, Finding이 있으면 `report.BelowThreshold`, 없으면 `report.NoChanges`.
+- `CommentBody`는 15.3의 11단계 문구 규칙이다: `Publishable`이면 `report.Markdown`, Finding이 있으면 `report.BelowThreshold(head, details)`, 없으면 `report.NoChanges`. App은 `report.DetailsCheckRun`, Action은 `report.DetailsJobSummary`를 넘긴다.
 - App의 `analyze_pr`는 `analysis.Load`, `Result.Compare`, `analysis.CommentBody`를 쓴다. App의 동작, 요청 순서, 골든(`testdata/golden/e2e/`)은 바뀌지 않는다.
 - `internal/github`에 `NewTokenClient(opts Options, token string) (*Client, error)`를 추가한다. 인증 헤더는 `Authorization: Bearer <token>`이다. 토큰 클라이언트에서 `FindCheckRun`은 App ID가 없으므로 에러를 반환한다. 토큰은 에러 메시지에 넣지 않는다.
 - `internal/github`에 `WorkflowFileRuns(ctx, owner, repo, workflowFile string, limit int) ([]WorkflowRun, error)`를 추가한다. `GET /repos/{o}/{r}/actions/workflows/{file}/runs?status=success&per_page={limit}` 한 페이지만 읽는다. `limit`은 `[1, 100]`으로 클램프한다.

@@ -135,7 +135,7 @@ func annotationProps(a report.Annotation) []prop {
 }
 
 func (r *runner) comment(ctx context.Context, diffs []*semdiff.FileDiff, meta report.Meta) string {
-	body, publishable := analysis.CommentBody(diffs, meta)
+	body, publishable := analysis.CommentBody(diffs, meta, report.DetailsJobSummary)
 	comments, err := r.client.IssueComments(ctx, r.cfg.owner, r.cfg.repo, r.cfg.number)
 	if err != nil {
 		return r.commentFailure(err)

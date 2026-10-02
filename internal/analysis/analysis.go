@@ -156,12 +156,12 @@ func HasFindings(diffs []*semdiff.FileDiff) bool {
 	return false
 }
 
-func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta) (string, bool) {
+func CommentBody(diffs []*semdiff.FileDiff, meta report.Meta, details report.DetailsLocation) (string, bool) {
 	switch {
 	case report.Publishable(diffs):
 		return report.Markdown(diffs, meta), true
 	case HasFindings(diffs):
-		return report.BelowThreshold(meta.HeadSHA), false
+		return report.BelowThreshold(meta.HeadSHA, details), false
 	}
 	return report.NoChanges(meta.HeadSHA), false
 }

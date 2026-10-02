@@ -195,7 +195,8 @@ func TestInjectionGolden(t *testing.T) {
 	}
 	assertNoMarkup(t, "text", plain, 0)
 	assertNoMarkup(t, "no-changes", NoChanges("`x<details>@org/admins\n## Approved"), 1)
-	assertNoMarkup(t, "below-threshold", BelowThreshold("`x<details>@org/admins\n## Approved"), 1)
+	assertNoMarkup(t, "below-threshold", BelowThreshold("`x<details>@org/admins\n## Approved", DetailsCheckRun), 1)
+	assertNoMarkup(t, "below-threshold-job-summary", BelowThreshold("`x<details>@org/admins\n## Approved", DetailsJobSummary), 1)
 	for _, line := range strings.Split(strings.TrimSuffix(txt, "\n"), "\n") {
 		switch {
 		case line == "":

@@ -186,6 +186,20 @@ func NoChanges(headSHA string) string {
 	return CommentMarker + "\n## quanto\n\nNo workflow execution changes as of commit " + inline(shortSHA(headSHA)) + ".\n"
 }
 
-func BelowThreshold(headSHA string) string {
-	return CommentMarker + "\n## quanto\n\nNo changes that meet the comment threshold as of commit " + inline(shortSHA(headSHA)) + ". Details are in the quanto check run.\n"
+type DetailsLocation int
+
+const (
+	DetailsCheckRun DetailsLocation = iota
+	DetailsJobSummary
+)
+
+func (l DetailsLocation) sentence() string {
+	if l == DetailsJobSummary {
+		return "Details are in the job summary of the quanto workflow run."
+	}
+	return "Details are in the quanto check run."
+}
+
+func BelowThreshold(headSHA string, details DetailsLocation) string {
+	return CommentMarker + "\n## quanto\n\nNo changes that meet the comment threshold as of commit " + inline(shortSHA(headSHA)) + ". " + details.sentence() + "\n"
 }

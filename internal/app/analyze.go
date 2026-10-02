@@ -175,7 +175,7 @@ func isNotFound(err error) bool {
 }
 
 func (a *App) publishComment(ctx context.Context, client *github.Client, p AnalyzePayload, diffs []*semdiff.FileDiff, meta report.Meta) error {
-	body, publishable := analysis.CommentBody(diffs, meta)
+	body, publishable := analysis.CommentBody(diffs, meta, report.DetailsCheckRun)
 	id, ok, err := a.store.CommentID(ctx, p.RepositoryID, p.Number)
 	if err != nil {
 		return err
