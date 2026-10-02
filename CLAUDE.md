@@ -758,7 +758,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
   - **`permissions.removed`의 `{detail}`.** after에서 워크플로와 모든 잡에 `permissions` 선언이 없을 때만 `Detail = "repository-default"`이고 문구 끝에 `; repository default applies`를 붙인다. 그 외에는 `Detail`이 빈 문자열이고 접미 문구가 없다.
   - **위치.** 스코프 항목은 후 실효 권한의 해당 스코프 값 노드(없으면 실효 권한을 정한 `permissions` 노드), `removed`는 `BasePos`에 전 실효 권한의 `permissions` 노드다.
   - **속성.** 전후 실효 권한이 모두 알려진 짝 잡(이름 변경 매칭 포함)에서 어떤 스코프의 레벨이 올라가면, 그 잡 또는 `workflow` 주체에 해당 스코프의 `permissions.broadened`나 `permissions.write_all`이 반드시 있다. `permissions`를 자체 선언한 추가된 잡은 선언에서 write인 스코프마다 같은 조건을 만족한다. 코퍼스 인접 쌍(양방향), 골든 케이스, 퍼즈에서 검증한다. `core/report` 테스트는 ruff#28682 구조(여러 워크플로의 `{}` → `contents: read`, 재사용 호출 잡의 `contents: read` 선언)가 `Publishable` false이고, 같은 구조에서 `contents: write`면 true임을 검증한다.
-- **위치.** 각 Finding의 `Pos`는 가장 구체적인 대상 노드다. 매트릭스는 `strategy.matrix` 노드, 권한은 해당 스코프 값 노드(없으면 `permissions` 노드), 액션은 해당 스텝의 `uses` 값 노드, 잡 단위는 잡 ID 키 노드, 트리거는 `on` 아래 이벤트 키 노드, 추정·그래프는 워크플로 루트의 `jobs` 키 노드다. `workflow.added`와 after가 파싱된 `workflow.unanalyzable`은 after 문서 루트의 첫 키 노드(`FirstKeyPos`)다. after가 파싱되지 않은 `workflow.unanalyzable`은 영값이다. `workflow.removed`는 `Pos`가 영값이고 `BasePos`가 before 문서 루트의 첫 키 노드다. 어노테이션은 head 파일에만 달 수 있으므로 `workflow.removed`는 어노테이션을 내지 않는다. `secrets.added`는 after에서 그 시크릿을 처음 참조하는 스칼라 노드(`SecretRefPos`)다.
+- **위치.** 각 Finding의 `Pos`는 가장 구체적인 대상 노드다. 매트릭스는 `strategy.matrix` 노드, 권한은 해당 스코프 값 노드(없으면 `permissions` 노드), 액션은 해당 스텝의 `uses` 값 노드, `job.runner_changed`는 after 잡의 `runs-on` 값 노드(after 잡에 `runs-on`이 없으면 잡 ID 키 노드), 그 외 잡 단위는 잡 ID 키 노드, 트리거는 `on` 아래 이벤트 키 노드, 추정·그래프는 워크플로 루트의 `jobs` 키 노드다. `workflow.added`와 after가 파싱된 `workflow.unanalyzable`은 after 문서 루트의 첫 키 노드(`FirstKeyPos`)다. after가 파싱되지 않은 `workflow.unanalyzable`은 영값이다. `workflow.removed`는 `Pos`가 영값이고 `BasePos`가 before 문서 루트의 첫 키 노드다. 어노테이션은 head 파일에만 달 수 있으므로 `workflow.removed`는 어노테이션을 내지 않는다. `secrets.added`는 after에서 그 시크릿을 처음 참조하는 스칼라 노드(`SecretRefPos`)다.
 - 스케줄 문구: `'0 * * * *' (24 runs/day)` 형식으로 표기한다. 모든 날 실행이 아니면 `(N runs on matching days)`, 해석 실패면 cron 문자열만 쓴다.
 - `graph.width_changed`와 `graph.depth_changed`는 값이 다를 때만 만든다.
 - 포맷 변경만 있는 경우(플로우 ↔ 블록, 따옴표, 주석, 키 순서, 앵커 도입)에는 Finding이 **0개**여야 한다.
@@ -1273,7 +1273,7 @@ func (s *Store) PendingCount(ctx) (int64, error)
 - 트리거: `push`와 `pull_request`. 워크플로 수준 `permissions: contents: read`.
 - `test` 잡: `ubuntu-latest`, checkout, `setup-go`(`go-version-file: go.mod`), `test -z "$(gofmt -l .)"`, `go vet ./...`, `go run scripts/check-comments.go`, `go test -race ./...`, `scripts/fetch-corpus.sh`, `go test -run Corpus ./...`, 퍼즈 대상마다 `go test -run '^$' -fuzz <대상> -fuzztime 20s -fuzzminimizetime 5s <패키지>`. 최소화 기본값(60초)이 퍼즈 시간을 잡아먹지 않게 하기 위해서다.
 - `integration` 잡: `services.postgres`(`postgres:16`, 헬스체크 포함), `QUANTO_TEST_DATABASE_URL` 설정 후 `go test -race ./internal/...`.
-- 액션 참조는 `actions/checkout@v4`, `actions/setup-go@v5`를 쓴다.
+- 액션 참조는 `actions/checkout@v5`, `actions/setup-go@v6`를 쓴다(Node 24 런타임).
 
 ---
 
