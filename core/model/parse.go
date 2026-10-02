@@ -303,6 +303,9 @@ func (p *parser) job(f source.Field) *Job {
 		j.SecretsInherit = true
 	}
 	j.SecretNames = sortedKeys(secrets)
+	if secrets.Exists() {
+		j.SecretsPos = secrets.Pos()
+	}
 	j.Outputs = sortedKeys(n.Field("outputs"))
 	steps := n.Field("steps")
 	for i, item := range steps.Items() {

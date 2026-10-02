@@ -68,6 +68,7 @@ type Job struct {
 	With            map[string]source.Positioned[string]
 	SecretsInherit  bool
 	SecretNames     []string
+	SecretsPos      source.Position
 	Outputs         []string
 	Steps           []*Step
 	Pos             source.Position

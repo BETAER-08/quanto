@@ -617,8 +617,11 @@ jobs:
 	if !reflect.DeepEqual(gotRemote, wantRemote) {
 		t.Errorf("remote = %v, want %v", gotRemote, wantRemote)
 	}
-	if tg := jobByID(t, w, "tagged"); tg.Uses.Kind != RefMutable || tg.Uses.Ref != "v2" || tg.Steps != nil {
+	if tg := jobByID(t, w, "tagged"); tg.Uses.Kind != RefMutable || tg.Uses.Ref != "v2" || tg.Steps != nil || tg.SecretsPos.Valid() {
 		t.Errorf("tagged = %+v", tg.Uses)
+	}
+	if l.SecretsPos.Path != "jobs.local.secrets" || start(l.SecretsPos) != at(8, 14) || r.SecretsPos.Path != "jobs.remote.secrets" {
+		t.Errorf("secrets pos = %+v %+v", l.SecretsPos, r.SecretsPos)
 	}
 	if !reflect.DeepEqual(w.SecretRefs, []string{"AWS_KEY", "DEPLOY_TOKEN"}) {
 		t.Errorf("secret refs = %v", w.SecretRefs)

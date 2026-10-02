@@ -356,16 +356,34 @@ func TestJobLevelChanges(t *testing.T) {
 		t.Errorf("runner = %+v", r)
 	}
 	to := findingsOf(d, kindJobTimeoutChanged)
-	if len(to) != 1 || to[0].Before != "10" || to[0].After != "(none)" {
+	if len(to) != 1 || to[0].Before != "10" || to[0].After != "(none)" || to[0].Pos.Path != "jobs.a" {
 		t.Errorf("timeout = %+v", to)
 	}
 	cc := findingsOf(d, kindJobConcurrencyChanged)
-	if len(cc) != 1 || cc[0].Before != "deploy" || cc[0].After != "deploy (cancel-in-progress: true)" {
+	if len(cc) != 1 || cc[0].Before != "deploy" || cc[0].After != "deploy (cancel-in-progress: true)" || cc[0].Pos.Path != "jobs.a.concurrency" {
 		t.Errorf("concurrency = %+v", cc)
+	}
+	raised := diff(t, before, strings.Replace(before, "timeout-minutes: 10", "timeout-minutes: 30", 1))
+	if rt := findingsOf(raised, kindJobTimeoutChanged); len(rt) != 1 || rt[0].Pos.Path != "jobs.a.timeout-minutes" {
+		t.Errorf("timeout value position = %+v", rt)
+	}
+	dropped := diff(t, before, strings.Replace(before, "    concurrency: deploy\n", "", 1))
+	if dc := findingsOf(dropped, kindJobConcurrencyChanged); len(dc) != 1 || dc[0].Pos.Path != "jobs.a" {
+		t.Errorf("concurrency fallback position = %+v", dc)
 	}
 	reordered := diff(t, before, strings.Replace(before, "[self-hosted, linux]", "[linux, self-hosted]", 1))
 	if len(reordered.Findings) != 0 {
 		t.Errorf("label order change = %+v", reordered.Findings)
+	}
+}
+
+func TestSecretsInheritPosition(t *testing.T) {
+	before := "on: push\njobs:\n  call:\n    uses: o/r/.github/workflows/x.yml@v1\n"
+	after := "on: push\njobs:\n  call:\n    uses: o/r/.github/workflows/x.yml@v1\n    secrets: inherit\n"
+	d := diff(t, before, after)
+	f := findingsOf(d, kindSecretsInheritAdded)
+	if len(f) != 1 || f[0].Pos.Path != "jobs.call.secrets" || f[0].Pos.Line != 5 || f[0].Pos.Column != 14 {
+		t.Errorf("inherit = %+v", f)
 	}
 }
 
@@ -374,7 +392,7 @@ func TestGraphUnresolvedAndDepth(t *testing.T) {
 	after := "on: push\njobs:\n  a: {runs-on: x, needs: [ghost], steps: [{run: a}]}\n"
 	d := diff(t, before, after)
 	u := findingsOf(d, kindGraphUnresolved)
-	if len(u) != 1 || u[0].Subject != "a" || u[0].After != "ghost" || u[0].Pos.Line != 3 {
+	if len(u) != 1 || u[0].Subject != "a" || u[0].After != "ghost" || u[0].Pos.Line != 3 || u[0].Pos.Path != "jobs.a.needs[0]" {
 		t.Errorf("unresolved = %+v", u)
 	}
 }

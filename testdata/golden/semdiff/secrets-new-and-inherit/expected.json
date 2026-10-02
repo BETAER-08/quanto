@@ -24,11 +24,11 @@
       "detail": "",
       "pos": {
         "file": ".github/workflows/ci.yml",
-        "line": 14,
-        "column": 3,
-        "end_line": 14,
-        "end_column": 8,
-        "path": "jobs.deploy"
+        "line": 17,
+        "column": 14,
+        "end_line": 17,
+        "end_column": 20,
+        "path": "jobs.deploy.secrets"
       },
       "base_pos": {
         "file": "",

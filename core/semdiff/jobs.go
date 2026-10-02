@@ -320,7 +320,7 @@ func (c *comparer) inheritChange(before, after *model.Job) {
 	if !after.SecretsInherit || (before != nil && before.SecretsInherit) {
 		return
 	}
-	f := Finding{Kind: kindSecretsInheritAdded, Subject: after.ID, Pos: after.Pos}
+	f := Finding{Kind: kindSecretsInheritAdded, Subject: after.ID, Pos: orJobPos(after.SecretsPos, after)}
 	if after.Uses != nil {
 		f.After = after.Uses.Raw
 	}

@@ -14,7 +14,7 @@
    - 푸시가 거절되면(원격이 앞서 있음) `git pull --ff-only origin main` 후 테스트를 다시 돌리고 푸시한다. fast-forward가 안 되면 `git pull --no-rebase origin main`으로 병합하고, 충돌이 나면 `git merge --abort` 후 멈추고 보고한다.
    - force 푸시, `rebase`, `reset --hard`, 히스토리 재작성, 태그 생성을 하지 않는다. 브랜치를 만들지 않고 PR을 열지 않는다.
    - `main` 푸시가 권한 검사에 막히면 우회 경로(브랜치 푸시 후 PR 병합 등)를 시도하지 말고, 막힌 명령과 메시지를 보고하고 멈춘다.
-2. **코드 주석 금지.** `//` 주석, `/* */` 주석, doc comment를 테스트 파일까지 포함해 전부 쓰지 않는다. SQL, 셸, YAML, Makefile, Containerfile 안의 주석도 금지다. 예외는 컴파일러 지시문 `//go:build`, `//go:embed`, `//go:generate`와 셸 스크립트 첫 줄의 shebang뿐이다. 마크다운 문서는 주석 규칙의 대상이 아니다. Go 파일은 `go run scripts/check-comments.go`가 기계적으로 검사한다(20.1절).
+2. **코드 주석 금지.** `//` 주석, `/* */` 주석, doc comment를 테스트 파일까지 포함해 전부 쓰지 않는다. SQL, 셸, YAML, Makefile, Containerfile 안의 주석도 금지다. 예외는 컴파일러 지시문 `//go:build`, `//go:embed`, `//go:generate`, 셸 스크립트 첫 줄의 shebang, 그리고 워크플로·액션 YAML에서 커밋 SHA로 고정한 `uses:` 줄 끝의 버전 주석(`# vX.Y.Z` 형식, 예: `uses: actions/checkout@<40자 SHA> # v7.0.1`)뿐이다. 이 버전 주석은 SHA로 고정한 모든 `uses:` 줄에 필수이며, 버전은 `git ls-remote --tags`로 SHA와 태그를 대조해 확정한다. 그 외 YAML 주석은 금지다. 마크다운 문서는 주석 규칙의 대상이 아니다. Go 파일은 `go run scripts/check-comments.go`가 기계적으로 검사한다(20.1절).
 3. **플레이스홀더 금지.** `TODO`, `FIXME`, `XXX`, `panic("not implemented")`, 빈 함수 본문, "추후 구현" 류를 남기지 않는다. 현재 페이즈 범위 밖의 기능은 파일 자체를 만들지 않는다.
 4. **범위 고정.** 이 문서에 없는 기능, 플래그, 환경변수, 의존성, 파일을 추가하지 않는다. 명세가 모호하면 가장 보수적인 해석을 택하고 페이즈 보고서의 "결정 사항"에 기록한다.
 5. **의존성 허용 목록.** Go 표준 라이브러리, `gopkg.in/yaml.v3`, `github.com/jackc/pgx/v5`, `github.com/prometheus/client_golang`. 그 외 모듈은 테스트 용도라도 추가하지 않는다. GitHub API 클라이언트, JWT, 라우터, CLI 프레임워크, 테스트 어서션 라이브러리 전부 표준 라이브러리로 구현한다.
@@ -355,6 +355,7 @@ type Job struct {
     With            map[string]source.Positioned[string]
     SecretsInherit  bool
     SecretNames     []string
+    SecretsPos      source.Position
     Outputs         []string
     Steps           []*Step
     Pos             source.Position
@@ -450,7 +451,7 @@ type ReusableRef struct {
 }
 ```
 
-`Jobs`는 YAML에 나타난 순서를 유지한다. `JobsPos`는 루트의 `jobs` 키 노드 위치이고, 키가 없으면 영값이다. `FirstKeyPos`는 루트 매핑의 첫 키 노드(`Fields()`의 첫 항목) 위치다. `SecretRefPos`는 `SecretRefs`의 각 이름에서 그 시크릿을 문서 순서상 처음 참조하는 스칼라 값 노드의 위치로 가는 맵이고, 참조가 없으면 nil이다. `Filters`의 키는 다음 집합으로 제한한다: `branches`, `branches-ignore`, `tags`, `tags-ignore`, `paths`, `paths-ignore`, `types`, `workflows`.
+`Jobs`는 YAML에 나타난 순서를 유지한다. `Job.SecretsPos`는 잡 `secrets` 값 노드 위치이고, 키가 없으면 영값이다. `JobsPos`는 루트의 `jobs` 키 노드 위치이고, 키가 없으면 영값이다. `FirstKeyPos`는 루트 매핑의 첫 키 노드(`Fields()`의 첫 항목) 위치다. `SecretRefPos`는 `SecretRefs`의 각 이름에서 그 시크릿을 문서 순서상 처음 참조하는 스칼라 값 노드의 위치로 가는 맵이고, 참조가 없으면 nil이다. `Filters`의 키는 다음 집합으로 제한한다: `branches`, `branches-ignore`, `tags`, `tags-ignore`, `paths`, `paths-ignore`, `types`, `workflows`.
 
 ### 6.2 정규화 규칙
 
@@ -700,7 +701,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 
 ### 9.4 Finding 목록 (Kind, 중요도, 영어 문구)
 
-문구의 `{}`는 해당 값으로 치환한다. 코드 식별자는 백틱으로 감싼다.
+문구의 `{}`는 해당 값으로 치환한다. 코드 식별자는 백틱으로 감싼다. 일반 원칙: 잡 단위 Finding의 `Pos`는 변경을 가장 직접 나타내는 after 노드이고, 그 노드가 없으면 잡 ID 키 노드다.
 
 | Kind | 중요도 | 문구 |
 |---|---|---|
@@ -758,7 +759,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
   - **`permissions.removed`의 `{detail}`.** after에서 워크플로와 모든 잡에 `permissions` 선언이 없을 때만 `Detail = "repository-default"`이고 문구 끝에 `; repository default applies`를 붙인다. 그 외에는 `Detail`이 빈 문자열이고 접미 문구가 없다.
   - **위치.** 스코프 항목은 후 실효 권한의 해당 스코프 값 노드(없으면 실효 권한을 정한 `permissions` 노드), `removed`는 `BasePos`에 전 실효 권한의 `permissions` 노드다.
   - **속성.** 전후 실효 권한이 모두 알려진 짝 잡(이름 변경 매칭 포함)에서 어떤 스코프의 레벨이 올라가면, 그 잡 또는 `workflow` 주체에 해당 스코프의 `permissions.broadened`나 `permissions.write_all`이 반드시 있다. `permissions`를 자체 선언한 추가된 잡은 선언에서 write인 스코프마다 같은 조건을 만족한다. 코퍼스 인접 쌍(양방향), 골든 케이스, 퍼즈에서 검증한다. `core/report` 테스트는 ruff#28682 구조(여러 워크플로의 `{}` → `contents: read`, 재사용 호출 잡의 `contents: read` 선언)가 `Publishable` false이고, 같은 구조에서 `contents: write`면 true임을 검증한다.
-- **위치.** 각 Finding의 `Pos`는 가장 구체적인 대상 노드다. 매트릭스는 `strategy.matrix` 노드, 권한은 해당 스코프 값 노드(없으면 `permissions` 노드), 액션은 해당 스텝의 `uses` 값 노드, `job.runner_changed`는 after 잡의 `runs-on` 값 노드(after 잡에 `runs-on`이 없으면 잡 ID 키 노드), 그 외 잡 단위는 잡 ID 키 노드, 트리거는 `on` 아래 이벤트 키 노드, 추정·그래프는 워크플로 루트의 `jobs` 키 노드다. `workflow.added`와 after가 파싱된 `workflow.unanalyzable`은 after 문서 루트의 첫 키 노드(`FirstKeyPos`)다. after가 파싱되지 않은 `workflow.unanalyzable`은 영값이다. `workflow.removed`는 `Pos`가 영값이고 `BasePos`가 before 문서 루트의 첫 키 노드다. 어노테이션은 head 파일에만 달 수 있으므로 `workflow.removed`는 어노테이션을 내지 않는다. `secrets.added`는 after에서 그 시크릿을 처음 참조하는 스칼라 노드(`SecretRefPos`)다.
+- **위치.** 각 Finding의 `Pos`는 가장 구체적인 대상 노드다. 매트릭스는 `strategy.matrix` 노드, 권한은 해당 스코프 값 노드(없으면 `permissions` 노드), 액션은 해당 스텝의 `uses` 값 노드, `job.runner_changed`는 after 잡의 `runs-on` 값 노드(after 잡에 `runs-on`이 없으면 잡 ID 키 노드), `job.timeout_changed`는 after 잡의 `timeout-minutes` 값 노드(없으면 잡 ID 키 노드), `job.concurrency_changed`는 after 잡의 `concurrency` 값 노드(없으면 잡 ID 키 노드), `secrets.inherit_added`는 after 잡의 `secrets` 값 노드(`SecretsPos`, 없으면 잡 ID 키 노드), `graph.unresolved`는 after 잡에서 해당 `needs` 항목 값 노드(없으면 잡 ID 키 노드), 그 외 잡 단위는 잡 ID 키 노드, 트리거는 `on` 아래 이벤트 키 노드, 추정과 그 외 그래프 Finding은 워크플로 루트의 `jobs` 키 노드다. `workflow.added`와 after가 파싱된 `workflow.unanalyzable`은 after 문서 루트의 첫 키 노드(`FirstKeyPos`)다. after가 파싱되지 않은 `workflow.unanalyzable`은 영값이다. `workflow.removed`는 `Pos`가 영값이고 `BasePos`가 before 문서 루트의 첫 키 노드다. 어노테이션은 head 파일에만 달 수 있으므로 `workflow.removed`는 어노테이션을 내지 않는다. `secrets.added`는 after에서 그 시크릿을 처음 참조하는 스칼라 노드(`SecretRefPos`)다.
 - 스케줄 문구: `'0 * * * *' (24 runs/day)` 형식으로 표기한다. 모든 날 실행이 아니면 `(N runs on matching days)`, 해석 실패면 cron 문자열만 쓴다.
 - `graph.width_changed`와 `graph.depth_changed`는 값이 다를 때만 만든다.
 - 포맷 변경만 있는 경우(플로우 ↔ 블록, 따옴표, 주석, 키 순서, 앵커 도입)에는 Finding이 **0개**여야 한다.
