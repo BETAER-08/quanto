@@ -321,10 +321,12 @@ type Workflow struct {
     Permissions PermissionSet
     Concurrency *Concurrency
     EnvKeys     []string
-    SecretRefs  []string
-    Jobs        []*Job
-    JobsPos     source.Position
-    Pos         source.Position
+    SecretRefs   []string
+    SecretRefPos map[string]source.Position
+    Jobs         []*Job
+    JobsPos      source.Position
+    FirstKeyPos  source.Position
+    Pos          source.Position
 }
 
 type Trigger struct {
@@ -448,7 +450,7 @@ type ReusableRef struct {
 }
 ```
 
-`Jobs`는 YAML에 나타난 순서를 유지한다. `JobsPos`는 루트의 `jobs` 키 노드 위치이고, 키가 없으면 영값이다. `Filters`의 키는 다음 집합으로 제한한다: `branches`, `branches-ignore`, `tags`, `tags-ignore`, `paths`, `paths-ignore`, `types`, `workflows`.
+`Jobs`는 YAML에 나타난 순서를 유지한다. `JobsPos`는 루트의 `jobs` 키 노드 위치이고, 키가 없으면 영값이다. `FirstKeyPos`는 루트 매핑의 첫 키 노드(`Fields()`의 첫 항목) 위치다. `SecretRefPos`는 `SecretRefs`의 각 이름에서 그 시크릿을 문서 순서상 처음 참조하는 스칼라 값 노드의 위치로 가는 맵이고, 참조가 없으면 nil이다. `Filters`의 키는 다음 집합으로 제한한다: `branches`, `branches-ignore`, `tags`, `tags-ignore`, `paths`, `paths-ignore`, `types`, `workflows`.
 
 ### 6.2 정규화 규칙
 
@@ -470,7 +472,7 @@ type ReusableRef struct {
   - `Identity()`는 `lower(owner/repo)`에 path가 있으면 `/lower(path)`를 붙인 값이다. Local이면 경로, Docker면 `docker://이미지`다
   - `VersionHint`: `uses` 값 노드의 `LineComment()`가 정규식 `^v?[0-9]+(\.[0-9]+)*`로 시작하고 그 뒤가 문자열 끝이거나 공백이면 그 일치 부분이다(예: `# v4.1.1` → `v4.1.1`, `# v4 pinned` → `v4`). 그 외는 빈 문자열이다. 주석은 ref 비교에 쓰지 않는다
 - **조건.** `if`는 `expr.ParseCondition`으로 파싱한다. 실패하면 `ParseErr`에 기록하고 `MODEL-EXPR-SYNTAX` 진단을 추가한다. 이 실패로 전체 파싱이 실패하지는 않는다.
-- **SecretRefs.** 문서의 모든 스칼라 **값**(키 제외)을 `Walk`로 순회해서, `expr.IsDynamic`이면 `ParseTemplate`로 파싱하고 `Context == "secrets"`인 참조의 첫 경로 세그먼트를 모은다. `*` 세그먼트와 `github_token`은 제외한다. 대문자로 정규화하고 정렬·중복 제거한다. 파싱 실패한 스칼라는 조용히 건너뛴다.
+- **SecretRefs.** 문서의 모든 스칼라 **값**(키 제외)을 `Walk`로 순회해서, `expr.IsDynamic`이면 `ParseTemplate`로 파싱하고 `Context == "secrets"`인 참조의 첫 경로 세그먼트를 모은다. `*` 세그먼트와 `github_token`은 제외한다. 대문자로 정규화하고 정렬·중복 제거한다. 파싱 실패한 스칼라는 조용히 건너뛴다. 이름마다 처음 만난 스칼라 노드의 위치를 `SecretRefPos`에 기록한다.
 
 ### 6.3 진단 코드
 
@@ -756,7 +758,7 @@ func CronRunsPerDay(expr string) (int, bool, bool)
   - **`permissions.removed`의 `{detail}`.** after에서 워크플로와 모든 잡에 `permissions` 선언이 없을 때만 `Detail = "repository-default"`이고 문구 끝에 `; repository default applies`를 붙인다. 그 외에는 `Detail`이 빈 문자열이고 접미 문구가 없다.
   - **위치.** 스코프 항목은 후 실효 권한의 해당 스코프 값 노드(없으면 실효 권한을 정한 `permissions` 노드), `removed`는 `BasePos`에 전 실효 권한의 `permissions` 노드다.
   - **속성.** 전후 실효 권한이 모두 알려진 짝 잡(이름 변경 매칭 포함)에서 어떤 스코프의 레벨이 올라가면, 그 잡 또는 `workflow` 주체에 해당 스코프의 `permissions.broadened`나 `permissions.write_all`이 반드시 있다. `permissions`를 자체 선언한 추가된 잡은 선언에서 write인 스코프마다 같은 조건을 만족한다. 코퍼스 인접 쌍(양방향), 골든 케이스, 퍼즈에서 검증한다. `core/report` 테스트는 ruff#28682 구조(여러 워크플로의 `{}` → `contents: read`, 재사용 호출 잡의 `contents: read` 선언)가 `Publishable` false이고, 같은 구조에서 `contents: write`면 true임을 검증한다.
-- **위치.** 각 Finding의 `Pos`는 가장 구체적인 대상 노드다. 매트릭스는 `strategy.matrix` 노드, 권한은 해당 스코프 값 노드(없으면 `permissions` 노드), 액션은 해당 스텝의 `uses` 값 노드, 잡 단위는 잡 ID 키 노드, 트리거는 `on` 아래 이벤트 키 노드, 추정·그래프는 워크플로 루트의 `jobs` 키 노드다.
+- **위치.** 각 Finding의 `Pos`는 가장 구체적인 대상 노드다. 매트릭스는 `strategy.matrix` 노드, 권한은 해당 스코프 값 노드(없으면 `permissions` 노드), 액션은 해당 스텝의 `uses` 값 노드, 잡 단위는 잡 ID 키 노드, 트리거는 `on` 아래 이벤트 키 노드, 추정·그래프는 워크플로 루트의 `jobs` 키 노드다. `workflow.added`와 after가 파싱된 `workflow.unanalyzable`은 after 문서 루트의 첫 키 노드(`FirstKeyPos`)다. after가 파싱되지 않은 `workflow.unanalyzable`은 영값이다. `workflow.removed`는 `Pos`가 영값이고 `BasePos`가 before 문서 루트의 첫 키 노드다. 어노테이션은 head 파일에만 달 수 있으므로 `workflow.removed`는 어노테이션을 내지 않는다. `secrets.added`는 after에서 그 시크릿을 처음 참조하는 스칼라 노드(`SecretRefPos`)다.
 - 스케줄 문구: `'0 * * * *' (24 runs/day)` 형식으로 표기한다. 모든 날 실행이 아니면 `(N runs on matching days)`, 해석 실패면 cron 문자열만 쓴다.
 - `graph.width_changed`와 `graph.depth_changed`는 값이 다를 때만 만든다.
 - 포맷 변경만 있는 경우(플로우 ↔ 블록, 따옴표, 주석, 키 순서, 앵커 도입)에는 Finding이 **0개**여야 한다.
@@ -768,7 +770,6 @@ func CronRunsPerDay(expr string) (int, bool, bool)
 - **액션·재사용 워크플로.** 재사용 워크플로를 호출하는 잡의 `uses`도 스텝 액션과 같은 규칙으로 비교한다. Identity는 `lower(owner/repo/path)`, local이면 경로다. 서드파티 판정은 `!Local && !Docker && !FirstParty`이고 docker·local은 `action.added`로 낸다. ref 집합이 바뀐 경우, 전의 ref가 전부 SHA이고 후에 SHA가 아닌 ref가 있으면 `action.pin_removed` 하나만, 그 외는 `action.ref_changed` 하나만 낸다.
 - **runs-on 표기.** 라벨을 정렬해 `, `로 연결한다. group이 있으면 앞에 `group <g>: `를 붙인다. 없으면 `(none)`이다. 라벨 순서만 바뀐 경우는 변경이 아니다.
 - **추정.** `RunnerMinutes`는 각 쪽에서 독립적으로 추정이 가능하면 채운다. `Estimate`와 `estimate.changed`는 양쪽 모두 가능할 때만 만든다. `Estimate.Samples`는 전후 잡별 샘플 수의 최솟값이다.
-- **`secrets.added` 위치.** 모델에 참조 위치가 없으므로 `Pos`는 영값이다.
 
 ### 9.5 잡 이름 변경 탐지
 

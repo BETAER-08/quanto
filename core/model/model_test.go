@@ -736,6 +736,27 @@ jobs:
 	if !reflect.DeepEqual(w.SecretRefs, want) {
 		t.Errorf("secret refs = %v, want %v", w.SecretRefs, want)
 	}
+	wantPos := map[string]string{
+		"NPM_TOKEN":    "env.A",
+		"OTHER-SECRET": "env.B",
+		"STEP_SECRET":  "",
+	}
+	for name, path := range wantPos {
+		pos, ok := w.SecretRefPos[name]
+		if !ok || !pos.Valid() {
+			t.Errorf("secret %s has no position", name)
+			continue
+		}
+		if path != "" && pos.Path != path {
+			t.Errorf("secret %s path = %q, want %q", name, pos.Path, path)
+		}
+	}
+	if len(w.SecretRefPos) != len(want) {
+		t.Errorf("secret positions = %v", w.SecretRefPos)
+	}
+	if w.FirstKeyPos.Path != "on" || w.FirstKeyPos.Line != 1 || w.FirstKeyPos.Column != 1 || w.FirstKeyPos.EndColumn != 2 {
+		t.Errorf("first key pos = %+v", w.FirstKeyPos)
+	}
 }
 
 func TestDeterministicParse(t *testing.T) {

@@ -202,7 +202,7 @@ func (c *comparer) secretChanges() {
 	}
 	for _, s := range c.after.wf.SecretRefs {
 		if !seen[s] {
-			c.emit(Finding{Kind: kindSecretsAdded, Subject: s})
+			c.emit(Finding{Kind: kindSecretsAdded, Subject: s, Pos: c.after.wf.SecretRefPos[s]})
 		}
 	}
 }

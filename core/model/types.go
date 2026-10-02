@@ -28,16 +28,18 @@ const (
 var ErrNotWorkflow = errors.New("document is not a workflow mapping")
 
 type Workflow struct {
-	File        string
-	Name        string
-	Triggers    []Trigger
-	Permissions PermissionSet
-	Concurrency *Concurrency
-	EnvKeys     []string
-	SecretRefs  []string
-	Jobs        []*Job
-	JobsPos     source.Position
-	Pos         source.Position
+	File         string
+	Name         string
+	Triggers     []Trigger
+	Permissions  PermissionSet
+	Concurrency  *Concurrency
+	EnvKeys      []string
+	SecretRefs   []string
+	SecretRefPos map[string]source.Position
+	Jobs         []*Job
+	JobsPos      source.Position
+	FirstKeyPos  source.Position
+	Pos          source.Position
 }
 
 type Trigger struct {

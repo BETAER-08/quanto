@@ -51,17 +51,21 @@ func Compare(in Input, opts Options) *FileDiff {
 	case in.BeforeErr != nil || in.AfterErr != nil:
 		d.Status = StatusUnanalyzable
 		d.Error = errorText(in.BeforeErr, in.AfterErr)
-		c.emit(Finding{Kind: kindWorkflowUnanalyzable, Detail: d.Error})
+		f := Finding{Kind: kindWorkflowUnanalyzable, Detail: d.Error}
+		if c.after != nil {
+			f.Pos = c.after.wf.FirstKeyPos
+		}
+		c.emit(f)
 	case c.before == nil && c.after == nil:
 		d.Status = StatusUnanalyzable
 		d.Error = "no workflow content on either side"
 		c.emit(Finding{Kind: kindWorkflowUnanalyzable, Detail: d.Error})
 	case c.before == nil:
 		d.Status = StatusAdded
-		c.emit(Finding{Kind: kindWorkflowAdded})
+		c.emit(Finding{Kind: kindWorkflowAdded, Pos: c.after.wf.FirstKeyPos})
 	case c.after == nil:
 		d.Status = StatusRemoved
-		c.emit(Finding{Kind: kindWorkflowRemoved})
+		c.emit(Finding{Kind: kindWorkflowRemoved, BasePos: c.before.wf.FirstKeyPos})
 	default:
 		d.Status = StatusModified
 		if in.OldPath != "" && in.OldPath != in.Path {

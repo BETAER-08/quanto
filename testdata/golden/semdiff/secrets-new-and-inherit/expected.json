@@ -47,12 +47,12 @@
       "after": "",
       "detail": "",
       "pos": {
-        "file": "",
-        "line": 0,
-        "column": 0,
-        "end_line": 0,
-        "end_column": 0,
-        "path": ""
+        "file": ".github/workflows/ci.yml",
+        "line": 13,
+        "column": 22,
+        "end_line": 13,
+        "end_column": 45,
+        "path": "jobs.build.steps[1].env.NPM_TOKEN"
       },
       "base_pos": {
         "file": "",
